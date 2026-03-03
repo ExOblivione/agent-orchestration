@@ -49,7 +49,7 @@ Depending on your use case, select the appropriate pattern:
 | **Concurrent** | Independent tasks that can run in parallel | [Template](../src/concurrent_template.py) |
 | **Group Chat** | Collaborative discussion, multiple perspectives | URL for template |
 | **Hand-off** | Route to specialists based on task type | URL for template |
-| **Magnetic** | Self-organizing, agents claim relevant tasks | URL for template |
+| **Magentic** | Self-organizing, agents claim relevant tasks | URL for template |
 
 
 ## Running Examples

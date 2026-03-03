@@ -85,7 +85,7 @@ Output: "Market Analysis Summary:
 ## Related Patterns
 
 - **Sequential**: Use when order matters and dependencies exist
-- **Magnetic**: Use when agents should self-select tasks
+- **Magentic**: Use when agents should self-select tasks
 - **Group Chat**: Use when agents need to discuss and collaborate
 
 ## Further Reading

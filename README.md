@@ -1,6 +1,6 @@
 # Multi-Agent Orchestration Framework
 
-A comprehensive template framework for building multi-agent systems with various orchestration patterns, supporting sequential, concurrent, group chat, hand-off, and magnetic architectures.
+A comprehensive template framework for building multi-agent systems with various orchestration patterns, supporting sequential, concurrent, group chat, hand-off, and magentic architectures.
 
 ## 🎯 Project Overview
 
@@ -30,7 +30,7 @@ This framework provides reusable templates and patterns for orchestrating multip
    - Dynamic routing based on task requirements
    - Use case: Task specialization, escalation workflows, domain-specific routing
 
-5. **Magnetic Orchestration**
+5. **Magentic Orchestration**
    - Agents are "attracted" to tasks based on their capabilities
    - Self-organizing system where agents claim relevant work
    - Use case: Load balancing, skill-based routing, autonomous task distribution
