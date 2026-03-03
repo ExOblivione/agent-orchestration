@@ -1,4 +1,4 @@
-# Architecture Guide
+# Architecture
 
 ## Overview
 
@@ -41,17 +41,6 @@ Pre-built components for common scenarios:
 - **Agent Templates**: Domain-specific agents (research, coding, review)
 - **Tool Templates**: Common tool integrations
 - **Configuration Templates**: Best-practice configurations
-
-
-## State Management
-
-Microsoft Agent Framework provides session-based state management:
-
-- **Agent Session**: Conversation context and history
-- **Workflow State**: Execution checkpoints and intermediate results
-- **Tool State**: Tool execution results and caching
-- **Custom State**: Application-specific data storage
-
 
 ## Next Steps
 

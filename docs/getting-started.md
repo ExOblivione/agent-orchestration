@@ -45,8 +45,8 @@ Depending on your use case, select the appropriate pattern:
 
 | Pattern | When to Use | Template |
 |---------|-------------|-------------|
-| **Sequential** | Linear pipeline, each step depends on previous | URL for template |
-| **Concurrent** | Independent tasks that can run in parallel | URL for template |
+| **Sequential** | Linear pipeline, each step depends on previous | [Template](../src/sequential_template.py) |
+| **Concurrent** | Independent tasks that can run in parallel | [Template](../src/concurrent_template.py) |
 | **Group Chat** | Collaborative discussion, multiple perspectives | URL for template |
 | **Hand-off** | Route to specialists based on task type | URL for template |
 | **Magnetic** | Self-organizing, agents claim relevant tasks | URL for template |
