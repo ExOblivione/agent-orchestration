@@ -4,7 +4,6 @@ from agent_framework.azure import AzureOpenAIResponsesClient
 from azure.identity import AzureCliCredential
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
 class AgentTemplate:
