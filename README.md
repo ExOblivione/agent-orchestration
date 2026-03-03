@@ -80,31 +80,12 @@ Centralized state handling:
 ## 🛠️ Technology Stack
 
 - **Language**: Python 3.10+
+- **Agent Framework**: Microsoft Agent Framework (Python)
+- **Azure Services**: Azure OpenAI, Azure AI Projects
 - **Async Support**: asyncio for concurrent operations
-- **Configuration**: YAML/JSON for declarative setup
 - **Type Checking**: Pydantic for data validation
 - **Testing**: pytest for comprehensive testing
-- **Logging**: structlog for structured logging
 
-## 🎨 Usage Example Preview
+## 🚀 Ready to get started?
 
-```python
-from agent_orchestration import SequentialOrchestrator
-from agent_orchestration.templates import ResearchAgent, CodingAgent, ReviewAgent
-
-# Create orchestrator
-orchestrator = SequentialOrchestrator()
-
-# Register agents
-orchestrator.register_agent(ResearchAgent(name="researcher"))
-orchestrator.register_agent(CodingAgent(name="coder"))
-orchestrator.register_agent(ReviewAgent(name="reviewer"))
-
-# Execute workflow
-result = await orchestrator.execute(
-    input="Build a REST API for user management",
-    context={"language": "Python", "framework": "FastAPI"}
-)
-
-print(result.output)
-```
+[Getting Started](docs/getting-started.md)

@@ -52,21 +52,11 @@ Depending on your use case, select the appropriate pattern:
 | **Magnetic** | Self-organizing, agents claim relevant tasks | URL for template |
 
 
-## Configuration
+## Running Examples
 
-Templates can be customized via YAML configuration:
-
-```yaml
-# config/workflow_config.yaml
-sequential_workflow:
-  timeout: 300
-  retry_attempts: 3
-  
-agents:
-  researcher:
-    model: gpt-4
-    temperature: 0.7
-    max_tokens: 2000
+```bash
+# Run the examples file
+python examples.py
 ```
 
 ## Troubleshooting
