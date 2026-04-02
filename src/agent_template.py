@@ -1,5 +1,5 @@
 import os
-from typing import Optional, AsyncIterator, Union
+from typing import Optional, AsyncIterator, Union, List, Callable
 from dotenv import load_dotenv
 
 from agent_framework import Agent
@@ -13,12 +13,13 @@ class AgentTemplate:
     """
     A simple, reusable agent template using Microsoft Agent Framework.
     
-    This agent can be configured with custom instructions and capabilities,
+    This agent can be configured with custom instructions, tools, and capabilities,
     making it suitable for all orchestration patterns.
     
     Attributes:
         name: Unique identifier for the agent
         instructions: System instructions defining agent behavior
+        tools: List of tool functions the agent can use
         credential: Azure credential for authentication
         client: Azure OpenAI Responses client
         agent: The underlying Microsoft Agent Framework agent
@@ -31,6 +32,7 @@ class AgentTemplate:
         self,
         name: str,
         instructions: str,
+        tools: Optional[List[Callable]] = None,
         deployment_name: Optional[str] = None,
         project_endpoint: Optional[str] = None
     ):
@@ -40,11 +42,13 @@ class AgentTemplate:
         Args:
             name: Name of the agent
             instructions: Instructions defining the agent's role and behavior
+            tools: Optional list of tool functions the agent can call
             deployment_name: Azure OpenAI deployment name (uses env var if not provided)
             project_endpoint: Azure AI project endpoint (uses env var if not provided)
         """
         self.name = name
         self.instructions = instructions
+        self.tools = tools or []
         
         # Initialize Azure credentials
         self.credential = AzureCliCredential()
@@ -56,12 +60,12 @@ class AgentTemplate:
             credential=self.credential,
         )
         
-        # Create the agent
+        # Create the agent with tools
         self.agent = Agent(
             client=self.client,
             name=self.name,
             instructions=self.instructions,
-            tools=[],  # Add tools here if needed
+            tools=self.tools,
         )
     
     async def run(
