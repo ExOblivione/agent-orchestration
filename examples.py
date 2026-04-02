@@ -7,7 +7,7 @@ for various roles and orchestration patterns.
 import asyncio
 from src.agent_template import AgentTemplate
 from src.sequential_template import SequentialOrchestrator
-# from src.concurrent_template import ConcurrentOrchestrator
+from src.concurrent_template import ConcurrentOrchestrator
 
 
 async def example_single_agent():
@@ -76,30 +76,32 @@ async def example_specialized_agents():
 
 
 async def example_concurrent_agents():
-    """Example: Multiple agents working concurrently with aggregation."""
+    """Example: Multiple agents working concurrently with optional aggregation."""
     print("\n=== Concurrent Orchestration Example ===")
     
     # Create specialized agents that will work in parallel
     agents = [
         AgentTemplate(
-            name="DataAnalyst",
-            instructions="You are a data analysis expert. Analyze the question from a metrics and data perspective. Keep it concise."
+            name="researcher",
+            instructions="You're an expert market and product researcher. Given a prompt, provide concise, factual insights, opportunities, and risks."
         ),
         AgentTemplate(
-            name="UXDesigner",
-            instructions="You are a UX/UI expert. Analyze the question from a user experience and design perspective. Keep it concise."
+            name="marketer",
+            instructions="You're a creative marketing strategist. Craft compelling value propositions and target messaging aligned to the prompt."
         ),
         AgentTemplate(
-            name="TechArchitect",
-            instructions="You are a technical architect. Analyze the question from a technical implementation perspective. Keep it concise."
+            name="legal",
+            instructions="You're a cautious legal/compliance reviewer. Highlight constraints, disclaimers, and policy concerns based on the prompt."
         )
     ]
     
-    # Create aggregator agent
+    # Optional: Create aggregator agent to consolidate responses
+    # PLACEHOLDER: Set to None to see all agent responses, or provide an aggregator to consolidate
     aggregator = AgentTemplate(
-        name="Synthesizer",
-        instructions="You are a synthesis expert. Combine the different perspectives into a comprehensive, well-rounded answer."
+        name="summarizer",
+        instructions="You are a helpful assistant that consolidates multiple domain expert outputs into one cohesive, concise summary with clear takeaways. Keep it under 200 words."
     )
+    aggregator = None  # Uncomment to see individual agent responses without aggregation
     
     # Create concurrent orchestrator
     orchestrator = ConcurrentOrchestrator(
@@ -108,14 +110,11 @@ async def example_concurrent_agents():
     )
     
     # Execute in parallel
-    question = "What makes a good dashboard for monitoring system performance?"
+    question = "We are launching a new budget-friendly electric bike for urban commuters."
     
     print(f"\nOrchestrator: {orchestrator}\n")
     final_result = await orchestrator.run(question)
     
-    print("="*60)
-    print("FINAL SYNTHESIZED RESULT:")
-    print("="*60)
     print(final_result)
 
 
@@ -123,8 +122,8 @@ async def main():
     """Run all examples."""
     # await example_single_agent()
     # await example_streaming()
-    await example_specialized_agents()
-    # await example_concurrent_agents()
+    # await example_specialized_agents()
+    await example_concurrent_agents()
 
 if __name__ == "__main__":
     asyncio.run(main())

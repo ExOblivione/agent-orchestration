@@ -1,6 +1,8 @@
-import asyncio
-from typing import List, Optional, Callable
+from typing import List, cast
 from src.agent_template import AgentTemplate
+from agent_framework.orchestrations import ConcurrentBuilder
+from agent_framework import Message
+from agent_framework import AgentExecutorResponse
 
 
 class ConcurrentOrchestrator:
@@ -8,169 +10,103 @@ class ConcurrentOrchestrator:
     Concurrent workflow orchestrator for parallel agent execution.
     
     This orchestrator runs multiple agents in parallel with the same input,
-    then aggregates their results using an aggregator agent.
+    collecting all their responses together. Optionally, an aggregator agent
+    can consolidate the diverse perspectives into a single coherent response.
     
+    Source: https://learn.microsoft.com/en-us/agent-framework/workflows/orchestrations/concurrent?pivots=programming-language-python
     """
-    def __init__(
-        self, 
-        agents: Optional[List[AgentTemplate]] = None,
-        aggregator: Optional[AgentTemplate] = None,
-        verbose: bool = False
-    ):
+    
+    def __init__(self, agents: List[AgentTemplate], aggregator: AgentTemplate | None = None):
         """
         Initialize the concurrent orchestrator.
         
         Args:
             agents: List of agents to execute in parallel
-            aggregator: Agent that combines results from all parallel agents
-            verbose: Whether to print execution progress
+            aggregator: Optional agent to aggregate the results
         """
-        self.agents = agents or []
-        self.aggregator = aggregator
-        self.verbose = verbose
-    
-    def add_agent(self, agent: AgentTemplate) -> None:
-        """
-        Add an agent to the parallel execution pool.
-        
-        Args:
-            agent: Agent to add to the pool
-        """
-        self.agents.append(agent)
-    
-    def add_agents(self, agents: List[AgentTemplate]) -> None:
-        """
-        Add multiple agents to the parallel execution pool.
-        
-        Args:
-            agents: List of agents to add to the pool
-        """
-        self.agents.extend(agents)
-    
-    def set_aggregator(self, aggregator: AgentTemplate) -> None:
-        """
-        Set the aggregator agent that combines results.
-        
-        Args:
-            aggregator: Agent to aggregate results from parallel agents
-        """
+        self.agents = agents
         self.aggregator = aggregator
     
-    async def execute(self, input_message: str) -> str:
+    async def run(self, initial_message: str) -> str:
         """
-        Execute all agents in parallel and aggregate results.
+        Execute the concurrent workflow with an initial message.
         
-        All agents receive the same input_message simultaneously.
-        Results are aggregated by the aggregator agent.
+        All agents process the same input simultaneously and independently.
+        Their responses are collected and returned together, optionally
+        aggregated by a custom aggregator agent.
         
         Args:
-            input_message: The input message for all agents
-        
+            initial_message: The starting message/prompt for the workflow
+            
         Returns:
-            Aggregated output from the aggregator agent
-        
-        Raises:
-            ValueError: If no agents are registered or no aggregator is set
+            Formatted output containing all agent responses, or aggregated summary
         """
-        if not self.agents:
-            raise ValueError("No agents registered. Add agents before executing.")
+        # Build the concurrent workflow with actual agents
+        con_agents = [agent.agent for agent in self.agents]
+        builder = ConcurrentBuilder(participants=con_agents)
         
-        if not self.aggregator:
-            raise ValueError("No aggregator set. Set an aggregator before executing.")
+        # Add custom aggregator if provided
+        if self.aggregator:
+            workflow = builder.with_aggregator(self._summarize_results).build()
+        else:
+            workflow = builder.build()
         
-        if self.verbose:
-            print(f"\n[Concurrent Execution] Running {len(self.agents)} agents in parallel...")
-            print(f"Input: {input_message[:100]}{'...' if len(input_message) > 100 else ''}\n")
+        # Execute workflow and collect outputs
+        output_data = None
+        async for event in workflow.run(initial_message, stream=True):
+            if event.type == "output":
+                output_data = event.data
         
-        # Execute all agents concurrently
-        tasks = [agent.run(input_message) for agent in self.agents]
-        results = await asyncio.gather(*tasks)
+        # Handle output based on whether aggregator was used
+        if output_data:
+            if self.aggregator:
+                # With aggregator: output is a consolidated string
+                return f"===== Final Consolidated Output =====\n{output_data}"
+            else:
+                # Without aggregator: output is list of messages
+                messages: list[Message] = cast(list[Message], output_data)
+                result_parts = ["===== Final Aggregated Conversation ====="]
+                
+                for i, msg in enumerate(messages, start=1):
+                    name = msg.author_name if msg.author_name else msg.role
+                    separator = "-" * 60
+                    result_parts.append(f"{separator}\n{i:02d} [{name}]:\n{msg.text}")
+                
+                return "\n".join(result_parts)
         
-        # Display individual results if verbose
-        if self.verbose:
-            for agent, result in zip(self.agents, results):
-                print(f"[{agent.name}] Output: {result[:100]}{'...' if len(result) > 100 else ''}\n")
-        
-        # Aggregate results
-        aggregation_input = self._format_results_for_aggregation(input_message, results)
-        
-        if self.verbose:
-            print(f"[Aggregating] Combining results...\n")
-        
-        final_result = await self.aggregator.run(aggregation_input)
-        
-        return final_result
+        return "No response generated"
     
-    async def execute_with_details(self, input_message: str) -> dict:
+    async def _summarize_results(self, results: list[AgentExecutorResponse]) -> str:
         """
-        Execute all agents in parallel and return detailed results.
+        Custom aggregator callback that consolidates multiple agent outputs.
+        
+        This method is invoked by the workflow when an aggregator is configured.
         
         Args:
-            input_message: The input message for all agents
-        
+            results: List of executor responses from all parallel agents
+            
         Returns:
-            Dictionary containing individual results and final aggregated result
+            Consolidated summary from the aggregator agent
         """
-        if not self.agents:
-            raise ValueError("No agents registered. Add agents before executing.")
-        
-        if not self.aggregator:
-            raise ValueError("No aggregator set. Set an aggregator before executing.")
-        
-        # Execute all agents concurrently
-        tasks = [agent.run(input_message) for agent in self.agents]
-        results = await asyncio.gather(*tasks)
-        
-        # Store individual results
-        individual_results = [
-            {
-                "agent_name": agent.name,
-                "output": result
-            }
-            for agent, result in zip(self.agents, results)
-        ]
-        
-        # Aggregate results
-        aggregation_input = self._format_results_for_aggregation(input_message, results)
-        final_result = await self.aggregator.run(aggregation_input)
-        
-        return {
-            "input": input_message,
-            "individual_results": individual_results,
-            "final_result": final_result,
-            "total_agents": len(self.agents)
-        }
-    
-    def _format_results_for_aggregation(self, original_input: str, results: List[str]) -> str:
-        """
-        Format individual agent results for the aggregator.
-        
-        Args:
-            original_input: The original input message
-            results: List of results from parallel agents
-        
-        Returns:
-            Formatted string for aggregator input
-        """
-        formatted = f"Original Question: {original_input}\n\n"
-        formatted += "Results from parallel agents:\n\n"
-        
-        for i, (agent, result) in enumerate(zip(self.agents, results), 1):
-            formatted += f"Agent {i} ({agent.name}):\n{result}\n\n"
-        
-        formatted += "Please synthesize these results into a comprehensive response."
-        
-        return formatted
-    
-    def clear_agents(self) -> None:
-        """Clear all agents from the pool."""
-        self.agents = []
-    
-    def __len__(self) -> int:
-        """Return the number of agents in the pool."""
-        return len(self.agents)
-    
+        # Extract one final assistant message per agent
+        expert_sections: list[str] = []
+        for r in results:
+            try:
+                messages = getattr(r.agent_response, "messages", [])
+                final_text = messages[-1].text if messages and hasattr(messages[-1], "text") else "(no content)"
+                expert_sections.append(f"{r.executor_id}:\n{final_text}")
+            except Exception as e:
+                expert_sections.append(f"{r.executor_id}: (error: {type(e).__name__}: {e})")
+
+        # Ask the aggregator agent to synthesize a concise summary
+        prompt = "\n\n".join(expert_sections)
+        response = await self.aggregator.run(prompt)
+        # AgentTemplate.run() returns a string directly
+        return response
+
     def __repr__(self) -> str:
         """String representation of the orchestrator."""
-        agent_names = [agent.name for agent in self.agents]
-        return f"ConcurrentOrchestrator(agents={agent_names}, aggregator={self.aggregator.name if self.aggregator else None})"
+        agent_names = ", ".join([agent.name for agent in self.agents])
+        if self.aggregator:
+            return f"ConcurrentOrchestrator([{agent_names}] -> {self.aggregator.name})"
+        return f"ConcurrentOrchestrator([{agent_names}])"
