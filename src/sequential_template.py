@@ -1,5 +1,7 @@
-from typing import List, Optional
+from typing import List, cast
 from src.agent_template import AgentTemplate
+from agent_framework.orchestrations import SequentialBuilder, AgentRequestInfoResponse
+from agent_framework import Message
 
 
 class SequentialOrchestrator:
@@ -8,115 +10,115 @@ class SequentialOrchestrator:
     
     This orchestrator runs agents in sequence, passing the output of each
     agent as input to the next agent in the pipeline.
-    
+
+    Source: https://learn.microsoft.com/en-us/agent-framework/workflows/orchestrations/sequential?pivots=programming-language-python
     """
-    def __init__(self, agents: Optional[List[AgentTemplate]] = None, verbose: bool = False):
+    
+    def __init__(self, agents: List[AgentTemplate]):
         """
         Initialize the sequential orchestrator.
         
         Args:
-            agents: List of agents to execute in sequence (can be added later)
-            verbose: Whether to print execution progress
+            agents: List of agents to execute in sequence
         """
-        self.agents = agents or []
-        self.verbose = verbose
+        self.agents = agents
     
-    def add_agent(self, agent: AgentTemplate) -> None:
+    async def run(self, initial_message: str) -> str:
         """
-        Add an agent to the end of the pipeline.
+        Execute the sequential workflow with an initial message.
         
         Args:
-            agent: Agent to add to the pipeline
-        """
-        self.agents.append(agent)
-    
-    def add_agents(self, agents: List[AgentTemplate]) -> None:
-        """
-        Add multiple agents to the pipeline.
-        
-        Args:
-            agents: List of agents to add to the pipeline
-        """
-        self.agents.extend(agents)
-    
-    async def execute(self, initial_input: str) -> str:
-        """
-        Execute the agent pipeline sequentially.
-        
-        Each agent receives the output from the previous agent as input.
-        The first agent receives the initial_input.
-        
-        Args:
-            initial_input: The initial message/input for the first agent
-        
+            initial_message: The starting message/prompt for the workflow
+            
         Returns:
-            The final output from the last agent in the pipeline
-        
-        Raises:
-            ValueError: If no agents are registered
+            The final response from the last agent in the sequence
         """
-        if not self.agents:
-            raise ValueError("No agents registered in the pipeline. Add agents before executing.")
+        # Build the sequential workflow with actual agents
+        seq_agents = [agent.agent for agent in self.agents]
+        workflow = SequentialBuilder(participants=seq_agents).build()
         
-        current_input = initial_input
+        # Execute workflow and collect outputs
+        outputs: list[list[Message]] = []
+        async for event in workflow.run(initial_message, stream=True):
+            if event.type == "output":
+                outputs.append(cast(list[Message], event.data))
         
-        for i, agent in enumerate(self.agents, 1):
-            if self.verbose:
-                print(f"\n[Step {i}/{len(self.agents)}] Executing {agent.name}...")
-                print(f"Input: {current_input[:100]}{'...' if len(current_input) > 100 else ''}")
-            
-            # Run the agent and get output
-            current_input = await agent.run(current_input)
-            
-            if self.verbose:
-                print(f"Output: {current_input[:100]}{'...' if len(current_input) > 100 else ''}")
+        # Extract final conversation response
+        if outputs:
+            messages: list[Message] = outputs[-1]
+            # Return the last assistant message
+            for msg in reversed(messages):
+                if msg.role == "assistant":
+                    return msg.text or ""
         
-        return current_input
+        return "No response generated"
     
-    async def execute_with_history(self, initial_input: str) -> dict:
+    async def run_with_human_feedback(
+        self, 
+        initial_message: str, 
+        feedback_agent_names: List[str] | None = None
+    ) -> str:
         """
-        Execute the pipeline and return detailed history of each step.
+        Execute the sequential workflow with human-in-the-loop feedback.
+        
+        This method pauses after specified agents respond, allowing for
+        external input or review before continuing to the next agent.
         
         Args:
-            initial_input: The initial message/input for the first agent
-        
+            initial_message: The starting message/prompt for the workflow
+            feedback_agent_names: List of agent names to pause after for feedback.
+                                 If None, pauses after all agents.
+            
         Returns:
-            Dictionary containing final result and execution history
+            The final response from the last agent in the sequence
         """
-        if not self.agents:
-            raise ValueError("No agents registered in the pipeline. Add agents before executing.")
+        # Build the sequential workflow with actual agents
+        seq_agents = [agent.agent for agent in self.agents]
         
-        history = []
-        current_input = initial_input
+        # Build workflow with request_info enabled for specified agents
+        builder = SequentialBuilder(participants=seq_agents)
+        if feedback_agent_names:
+            workflow = builder.with_request_info(agents=feedback_agent_names).build()
+        else:
+            workflow = builder.with_request_info().build()
         
-        for i, agent in enumerate(self.agents, 1):
-            step_info = {
-                "step": i,
-                "agent_name": agent.name,
-                "input": current_input
-            }
+        async def process_event_stream(stream):
+            """Process events and collect request_info responses."""
+            responses = {}
+            outputs = []
             
-            # Run the agent
-            current_input = await agent.run(current_input)
-            step_info["output"] = current_input
+            async for event in stream:
+                if event.type == "request_info":
+                    # Auto-approve for this template
+                    # In production, this is where you'd gather actual human feedback
+                    print(f"Request for feedback at: {event.request_id}")
+                    responses[event.request_id] = AgentRequestInfoResponse.approve()
+                elif event.type == "output":
+                    outputs.append(cast(list[Message], event.data))
             
-            history.append(step_info)
+            return responses if responses else None, outputs
         
-        return {
-            "final_result": current_input,
-            "history": history,
-            "total_steps": len(self.agents)
-        }
-    
-    def clear_agents(self) -> None:
-        """Clear all agents from the pipeline."""
-        self.agents = []
-    
-    def __len__(self) -> int:
-        """Return the number of agents in the pipeline."""
-        return len(self.agents)
+        # Initial run
+        stream = workflow.run(initial_message, stream=True)
+        pending_responses, outputs = await process_event_stream(stream)
+        
+        # Continue processing until no more feedback requests
+        while pending_responses is not None:
+            stream = workflow.run(stream=True, responses=pending_responses)
+            pending_responses, new_outputs = await process_event_stream(stream)
+            if new_outputs:
+                outputs = new_outputs
+        
+        # Extract final response
+        if outputs:
+            messages: list[Message] = outputs[-1]
+            for msg in reversed(messages):
+                if msg.role == "assistant":
+                    return msg.text or ""
+        
+        return "No response generated"
     
     def __repr__(self) -> str:
         """String representation of the orchestrator."""
-        agent_names = [agent.name for agent in self.agents]
-        return f"SequentialOrchestrator(agents={agent_names})"
+        agent_names = " -> ".join([agent.name for agent in self.agents])
+        return f"SequentialOrchestrator({agent_names})"

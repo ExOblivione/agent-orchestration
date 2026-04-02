@@ -7,7 +7,7 @@ for various roles and orchestration patterns.
 import asyncio
 from src.agent_template import AgentTemplate
 from src.sequential_template import SequentialOrchestrator
-from src.concurrent_template import ConcurrentOrchestrator
+# from src.concurrent_template import ConcurrentOrchestrator
 
 
 async def example_single_agent():
@@ -38,7 +38,6 @@ async def example_streaming():
     print("\n")
 
 
-
 async def example_specialized_agents():
     """Example: Creating specialized agents using Sequential Orchestrator."""
     print("=== Sequential Orchestration Example ===")
@@ -61,13 +60,12 @@ async def example_specialized_agents():
     
     # Create sequential orchestrator
     orchestrator = SequentialOrchestrator(
-        agents=[researcher, coder, reviewer],
-        verbose=True
+        agents=[researcher, coder, reviewer]
     )
     
     # Execute the pipeline
     print(f"\nPipeline: {orchestrator}\n")
-    final_result = await orchestrator.execute(
+    final_result = await orchestrator.run(
         "Create a REST API endpoint for user registration with email validation"
     )
     
@@ -75,45 +73,6 @@ async def example_specialized_agents():
     print("FINAL RESULT:")
     print("="*60)
     print(final_result)
-
-async def example_sequential_with_history():
-    """Example: Sequential orchestration with execution history."""
-    print("\n=== Sequential Orchestration with History ===")
-    
-    # Content creation pipeline
-    agents = [
-        AgentTemplate(
-            name="Outliner",
-            instructions="Create a brief outline for the given topic. List 3-4 main points."
-        ),
-        AgentTemplate(
-            name="Writer",
-            instructions="Expand the outline into a short article (2-3 paragraphs)."
-        ),
-        AgentTemplate(
-            name="Editor",
-            instructions="Edit and improve the article for clarity and grammar."
-        )
-    ]
-    
-    orchestrator = SequentialOrchestrator(agents=agents)
-    
-    # Execute with history tracking
-    result = await orchestrator.execute_with_history(
-        "The benefits of asynchronous programming in Python"
-    )
-    
-    print(f"\nTotal steps: {result['total_steps']}\n")
-    
-    for step in result['history']:
-        print(f"--- Step {step['step']}: {step['agent_name']} ---")
-        print(f"Output: {step['output'][:150]}...\n")
-    
-    print("="*60)
-    print("FINAL ARTICLE:")
-    print("="*60)
-    print(result['final_result'])
-
 
 
 async def example_concurrent_agents():
@@ -145,15 +104,14 @@ async def example_concurrent_agents():
     # Create concurrent orchestrator
     orchestrator = ConcurrentOrchestrator(
         agents=agents,
-        aggregator=aggregator,
-        verbose=True
+        aggregator=aggregator
     )
     
     # Execute in parallel
     question = "What makes a good dashboard for monitoring system performance?"
     
     print(f"\nOrchestrator: {orchestrator}\n")
-    final_result = await orchestrator.execute(question)
+    final_result = await orchestrator.run(question)
     
     print("="*60)
     print("FINAL SYNTHESIZED RESULT:")
@@ -161,59 +119,12 @@ async def example_concurrent_agents():
     print(final_result)
 
 
-async def example_concurrent_with_details():
-    """Example: Concurrent orchestration with detailed results."""
-    print("\n\n=== Concurrent Orchestration with Details ===")
-    
-    # Market analysis scenario
-    analysts = [
-        AgentTemplate(
-            name="NewsAnalyst",
-            instructions="Analyze from a news and media perspective. What are the latest news trends?"
-        ),
-        AgentTemplate(
-            name="SocialMediaAnalyst",
-            instructions="Analyze from a social media perspective. What is the public sentiment?"
-        ),
-        AgentTemplate(
-            name="FinancialAnalyst",
-            instructions="Analyze from a financial markets perspective. What do the numbers say?"
-        )
-    ]
-    
-    aggregator = AgentTemplate(
-        name="ChiefAnalyst",
-        instructions="Synthesize all analysis into a cohesive market intelligence report with key takeaways."
-    )
-    
-    orchestrator = ConcurrentOrchestrator(agents=analysts, aggregator=aggregator)
-    
-    # Execute with detailed tracking
-    result = await orchestrator.execute_with_details(
-        "What is the current market sentiment around AI technology adoption?"
-    )
-    
-    print(f"\nTotal agents used: {result['total_agents']}\n")
-    
-    for res in result['individual_results']:
-        print(f"--- {res['agent_name']} ---")
-        print(f"{res['output'][:120]}...\n")
-    
-    print("="*60)
-    print("CHIEF ANALYST REPORT:")
-    print("="*60)
-    print(result['final_result'])
-
-
 async def main():
     """Run all examples."""
     # await example_single_agent()
-    # await example_specialized_agents()
-    # await example_sequential_with_history()
-    await example_concurrent_agents()
-    await example_concurrent_with_details()
     # await example_streaming()
-
+    await example_specialized_agents()
+    # await example_concurrent_agents()
 
 if __name__ == "__main__":
     asyncio.run(main())

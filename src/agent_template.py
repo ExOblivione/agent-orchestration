@@ -52,7 +52,7 @@ class AgentTemplate:
         # Initialize client
         self.client = FoundryChatClient(
             project_endpoint=project_endpoint or os.environ["AZURE_AI_PROJECT_ENDPOINT"],
-            deployment_name=deployment_name or os.environ["AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME"],
+            model=deployment_name or os.environ["AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME"],
             credential=self.credential,
         )
         
