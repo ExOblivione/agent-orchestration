@@ -1,8 +1,11 @@
 import os
 from typing import Optional, AsyncIterator, Union
-from agent_framework.azure import AzureOpenAIResponsesClient
-from azure.identity import AzureCliCredential
 from dotenv import load_dotenv
+
+from agent_framework import Agent
+from agent_framework.foundry import FoundryChatClient
+from azure.identity import AzureCliCredential
+
 
 load_dotenv()
 
@@ -19,6 +22,9 @@ class AgentTemplate:
         credential: Azure credential for authentication
         client: Azure OpenAI Responses client
         agent: The underlying Microsoft Agent Framework agent
+
+    Source:
+        https://github.com/microsoft/agent-framework/blob/main/python/samples/01-get-started/01_hello_agent.py
     """
     
     def __init__(
@@ -44,16 +50,18 @@ class AgentTemplate:
         self.credential = AzureCliCredential()
         
         # Initialize client
-        self.client = AzureOpenAIResponsesClient(
+        self.client = FoundryChatClient(
             project_endpoint=project_endpoint or os.environ["AZURE_AI_PROJECT_ENDPOINT"],
             deployment_name=deployment_name or os.environ["AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME"],
             credential=self.credential,
         )
         
         # Create the agent
-        self.agent = self.client.as_agent(
+        self.agent = Agent(
+            client=self.client,
             name=self.name,
             instructions=self.instructions,
+            tools=[],  # Add tools here if needed
         )
     
     async def run(
