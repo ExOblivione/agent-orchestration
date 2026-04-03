@@ -1,8 +1,10 @@
-# Hand-off Orchestration Pattern
+# Handoff Orchestration Pattern
 
 ## Overview
 
-Hand-off orchestration routes requests to specialized agents based on context, requirements, or expertise needed. An entry agent (triage) analyzes the request and dynamically transfers control to the most appropriate specialist agent.
+Handoff orchestration enables dynamic routing of conversations between specialized agents based on context, requirements, or expertise needed. Agents can transfer control to each other, allowing complex tasks to be handled by the most appropriate specialist at each stage.
+
+This pattern implements intelligent agent-to-agent transfers with full context preservation, supporting both simple triage workflows and complex multi-agent collaboration.
 
 ## Pattern Structure
 
@@ -17,11 +19,11 @@ Entry/Triage Agent ─────┼─→ Specialist Agent B (Technical)
 ```
 
 Flow:
-1. **Entry Agent** receives initial request
+1. **Entry/Triage Agent** receives initial request
 2. **Analysis** determines which specialist is needed
-3. **Hand-off** transfers control with full context
+3. **Handoff** transfers control with full context
 4. **Specialist** handles the request
-5. **Optional**: Specialist can hand-off to another if needed
+5. **Optional**: Specialist can handoff to another if needed
 
 ## When to Use
 
@@ -100,14 +102,53 @@ Customer: "I can't log in and I think I was hacked!"
 ## Best Practices
 
 1. **Clear Specialties**: Define non-overlapping domains when possible
-2. **Transfer Limits**: Set maximum hand-offs to prevent loops
+2. **Transfer Limits**: Set maximum handoffs to prevent loops
 3. **Context Preservation**: Always pass full context on transfer
 4. **Fallback Agent**: Define default when routing is uncertain
 5. **Transfer Reasons**: Log why transfers happen for improvement
-6. **Customer Experience**: Minimize visible hand-offs to user
+6. **Customer Experience**: Minimize visible handoffs to user
+
+## Implementation
+
+```python
+from src import AgentTemplate, HandOffOrchestrator
+from agent_framework.orchestrations import HandoffBuilder
+
+# Define specialized agents
+agents = [
+    AgentTemplate(name="TriageAgent", instructions="..."),
+    AgentTemplate(name="BillingAgent", instructions="..."),
+    AgentTemplate(name="TechSupportAgent", instructions="...")
+]
+
+# Define custom routing (optional)
+def custom_workflow_builder(agents_list):
+    builder = HandoffBuilder(participants=agents_list)
+    # Triage can handoff to anyone
+    builder.add_handoff(source="TriageAgent", target="*")
+    # Billing can handoff to TechSupport or back to Triage
+    builder.add_handoff(source="BillingAgent", target=["TechSupportAgent", "TriageAgent"])
+    return builder.with_autonomous_mode()  # Enable non-interactive execution
+
+# Create orchestrator
+orchestrator = HandOffOrchestrator(
+    agents=agents,
+    workflow_builder=custom_workflow_builder,  # Optional custom routing
+    termination_condition=lambda msgs: len(msgs) >= 10  # Optional
+)
+
+# Run handoff workflow
+result = await orchestrator.run("I was charged twice this month!")
+```
+
+**Key Features:**
+- Flexible routing: default all-to-all or custom rules
+- Autonomous mode for non-interactive execution
+- Custom termination conditions
+- Full context preservation across handoffs
 
 ## Further Reading
 
-- [Microsoft Agent Framework Workflows](https://learn.microsoft.com/en-us/agent-framework/workflows/)
+- [Microsoft Agent Framework - Handoff Orchestration](https://learn.microsoft.com/en-us/agent-framework/workflows/orchestrations/handoff?pivots=programming-language-python)
 - [Architecture Guide](../architecture.md)
-- [Example Implementation](../../examples/hand_off_support.py)
+- [Example Implementation](../../examples/handoff_patterns.py)

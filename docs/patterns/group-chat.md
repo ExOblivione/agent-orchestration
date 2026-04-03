@@ -108,32 +108,46 @@ Key elements:
 5. **Termination**: Define clear completion criteria
 6. **Context Pruning**: Remove irrelevant history to save tokens
 
- 
+## Implementation
+
+```python
+from src import AgentTemplate, GroupChatOrchestrator
+
+# Define discussion participants
+agents = [
+    AgentTemplate(name="ProductManager", instructions="..."),
+    AgentTemplate(name="UXDesigner", instructions="..."),
+    AgentTemplate(name="Engineer", instructions="..."),
+    AgentTemplate(name="SecurityExpert", instructions="...")
+]
+
+# Optional: Define facilitator
+facilitator = AgentTemplate(
+    name="Facilitator",
+    instructions="Guide discussion and synthesize decisions..."
+)
+
+# Create orchestrator
+orchestrator = GroupChatOrchestrator(
+    agents=agents,
+    facilitator=facilitator,  # Optional
+    max_rounds=10,            # Max conversation rounds
+    selector_prompt="Select next speaker based on expertise..."  # Optional
+)
+
+# Run discussion
+result = await orchestrator.run("Review: Biometric authentication feature")
+```
+
+**Key Features:**
+- Dynamic speaker selection based on context
+- Optional facilitator for coordination
+- Configurable termination conditions
+- Full conversation context maintained
 
 ## Further Reading
 
-- [Microsoft Agent Framework Workflows](https://learn.microsoft.com/en-us/agent-framework/workflows/)
+- [Microsoft Agent Framework - Group Chat Orchestration](https://learn.microsoft.com/en-us/agent-framework/workflows/orchestrations/group-chat?pivots=programming-language-python)
 - [Architecture Guide](../architecture.md)
-- [Example Implementation](../../examples/group_chat_brainstorm.py)
+- [Example Implementation](../../examples/groupchat_example.py)
 
----
-
-### TODO: Advanced Features
-
-#### 1. Voting Mechanism
-```python
-workflow.enable_voting(
-    required_majority=0.75,
-    voting_trigger="facilitator_request"
-)
-```
-
-#### 2. Sub-Groups
-```python
-# Create breakout discussions
-workflow.create_subgroup(
-    participants=[ux_designer, pm],
-    topic="User flow details",
-    rejoin_after=5
-)
-```

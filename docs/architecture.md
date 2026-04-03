@@ -26,12 +26,11 @@ Workflows provide graph-based orchestration with:
 - **Executors**: Individual processing units (agents or functions)
 - **Edges**: Connections defining message flow between executors
 - **Events**: Observability into workflow execution
-- **Checkpointing**: State persistence for long-running processes
 
 ### 2. LLM Agents (Microsoft Agent Framework)
 Individual agents that:
 - Process inputs using LLMs
-- Call tools and MCP servers
+- Call tools
 - Maintain conversation context
 - Generate responses
 
@@ -40,7 +39,6 @@ Pre-built components for common scenarios:
 - **Workflow Templates**: Ready-to-use orchestration patterns
 - **Agent Templates**: Domain-specific agents (research, coding, review)
 - **Tool Templates**: Common tool integrations
-- **Configuration Templates**: Best-practice configurations
 
 ## Next Steps
 

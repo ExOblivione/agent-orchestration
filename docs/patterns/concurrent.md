@@ -81,6 +81,39 @@ Output: "Market Analysis Summary:
 5. **Partial Success**: Handle cases where some agents fail
 6. **Resource Limits**: Set max concurrent agents to avoid overwhelming systems
 
+## Implementation
+
+```python
+from src import AgentTemplate, ConcurrentOrchestrator
+
+# Define parallel agents
+agents = [
+    AgentTemplate(name="NewsAgent", instructions="..."),
+    AgentTemplate(name="SocialAgent", instructions="..."),
+    AgentTemplate(name="FinanceAgent", instructions="...")
+]
+
+# Optional: Define aggregator
+aggregator = AgentTemplate(
+    name="Aggregator",
+    instructions="Synthesize findings from all agents..."
+)
+
+# Create orchestrator
+orchestrator = ConcurrentOrchestrator(
+    agents=agents,
+    aggregator_agent=aggregator  # Optional
+)
+
+# Run concurrent analysis
+result = await orchestrator.run("Analyze Tesla market conditions")
+```
+
+**Key Features:**
+- All agents execute in parallel
+- Optional aggregator for result synthesis
+- Automatic result collection and formatting
+
 
 ## Related Patterns
 
@@ -90,6 +123,6 @@ Output: "Market Analysis Summary:
 
 ## Further Reading
 
-- [Microsoft Agent Framework Workflows](https://learn.microsoft.com/en-us/agent-framework/workflows/)
+- [Microsoft Agent Framework - Concurrent Orchestration](https://learn.microsoft.com/en-us/agent-framework/workflows/orchestrations/concurrent?pivots=programming-language-python)
 - [Architecture Guide](../architecture.md)
-- [Example Implementation](../../examples/concurrent_analysis.py)
+- [Example Implementation](../../examples/concurrent_example.py)

@@ -80,6 +80,36 @@ Output: "[Final HTML with proper formatting and images]"
 4. **Logging**: Log each stage's input and output for debugging
 5. **Timeouts**: Set reasonable timeouts for each agent
 
+## Implementation
+
+```python
+from src import AgentTemplate, SequentialOrchestrator
+
+# Define pipeline agents
+agents = [
+    AgentTemplate(name="Researcher", instructions="..."),
+    AgentTemplate(name="Writer", instructions="..."),
+    AgentTemplate(name="Editor", instructions="...")
+]
+
+# Create orchestrator
+orchestrator = SequentialOrchestrator(agents=agents)
+
+# Run pipeline
+result = await orchestrator.run("Create a post about AI")
+
+# Run with human feedback (optional)
+result = await orchestrator.run_with_human_feedback(
+    "Create a post about AI",
+    feedback_agent_names=["Editor"]  # Pause after Editor for review
+)
+```
+
+**Key Features:**
+- Automatic output formatting showing each agent's response
+- Human-in-the-loop feedback support
+- Clean error handling and context management
+
 ## Related Patterns
 
 - **Concurrent**: Use when stages can run independently
@@ -88,6 +118,6 @@ Output: "[Final HTML with proper formatting and images]"
 
 ## Further Reading
 
-- [Microsoft Agent Framework Workflows](https://learn.microsoft.com/en-us/agent-framework/workflows/)
+- [Microsoft Agent Framework - Sequential Orchestration](https://learn.microsoft.com/en-us/agent-framework/workflows/orchestrations/sequential?pivots=programming-language-python)
 - [Architecture Guide](../architecture.md)
-- [Example Implementation](../../examples/sequential_pipeline.py)
+- [Example Implementation](../../examples/sequential_example.py)

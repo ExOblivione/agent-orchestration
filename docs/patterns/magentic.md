@@ -2,246 +2,187 @@
 
 ## Overview
 
-Magentic orchestration creates a self-organizing system where agents autonomously "claim" tasks from a shared pool based on their capabilities and current workload. Tasks act like magnets, attracting the most suitable available agents.
+Magentic orchestration is a flexible, general-purpose multi-agent pattern designed for complex, open-ended tasks that require dynamic collaboration. Based on the [Magentic-One](https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/magentic-one.html) system from AutoGen, this pattern uses a dedicated **Magentic manager** to coordinate a team of specialized agents, dynamically selecting which agent should act next based on the evolving context, task progress, and agent capabilities.
+
+The Magentic manager maintains a shared context, tracks progress, and adapts the workflow in real time. This enables the system to break down complex problems, delegate subtasks, and iteratively refine solutions through agent collaboration.
 
 ## Pattern Structure
 
 ```
-Task Pool: [Task1] [Task2] [Task3] [Task4] [Task5]
-              ↓       ↓       ↓       ↓       ↓
-           [Agents evaluate and claim tasks]
-              ↓       ↓       ↓       ↓       ↓
-           Agent1  Agent2  Agent3  Agent4  Agent1
-          (Python) (JS)    (DB)    (Deploy) (Python)
+User Task → Manager Agent → Plan Creation
+                ↓
+        [Context & Progress Tracking]
+                ↓
+    Manager selects next agent dynamically
+                ↓
+    ResearcherAgent / CoderAgent / AnalystAgent
+                ↓
+        Agent executes subtask
+                ↓
+    Manager evaluates progress & updates plan
+                ↓
+    [Repeat until complete or stalled]
+                ↓
+        Manager synthesizes final result
 ```
 
-Key mechanics:
-1. **Task Broadcasting**: Tasks published to shared pool
-2. **Agent Evaluation**: Agents assess task fit based on capabilities
-3. **Claiming**: Agent with best fit claims the task
-4. **Execution**: Agent completes task independently
-5. **Load Balancing**: Busy agents are less likely to claim new tasks
+**Key Components:**
+1. **Manager Agent**: Coordinates the team, creates plans, selects agents, tracks progress
+2. **Specialized Agents**: Execute specific tasks (research, coding, analysis, etc.)
+3. **Shared Context**: Manager maintains conversation history and progress ledger
+4. **Dynamic Selection**: Manager decides which agent acts next based on current state
+5. **Iterative Refinement**: Multiple rounds of agent collaboration to refine solutions
 
 ## When to Use
 
-- **Dynamic Workloads**: Unpredictable task arrival patterns
-- **Load Balancing**: Distribute work across available agents
-- **Skill-Based Routing**: Match tasks to specialized agents
-- **Autonomous Systems**: Minimal central coordination needed
-- **Scalable Systems**: Add/remove agents without reconfiguration
-
-## Real-Life Example: Development Task Assignment
-
-**Scenario**: A development team has various tasks (coding, code review, testing, deployment) that need to be completed. Agents specialize in different areas and autonomously pick tasks they're best suited for.
-
-### Agents with Capabilities
-
-1. **Python Developer Agent**: Capabilities: [python, backend, api, testing]
-2. **JavaScript Developer Agent**: Capabilities: [javascript, frontend, react, ui]
-3. **Database Agent**: Capabilities: [sql, database, optimization, migration]
-4. **DevOps Agent**: Capabilities: [deployment, ci-cd, docker, kubernetes]
-5. **QA Agent**: Capabilities: [testing, qa, automation, integration-tests]
-
-
-### Execution Flow
-
-```
-Task Pool Published:
-- TASK-101: Auth API [python, api, backend] - HIGH
-- TASK-102: Login Form [javascript, react, frontend] - HIGH
-- TASK-103: DB Optimization [sql, database] - MEDIUM
-- TASK-104: CI/CD Setup [ci-cd, deployment] - HIGH
-- TASK-105: Integration Tests [testing, python] - MEDIUM
-
-┌─────────────────────────────────────────────────────┐
-│ Agent Evaluation Phase (all agents evaluate)        │
-└─────────────────────────────────────────────────────┘
-
-[Python Dev 1]: 
-  - TASK-101: Match 100% (all caps match), Load: 0/3 → BID: 0.95
-  - TASK-105: Match 66% (testing+python), Load: 0/3 → BID: 0.60
-
-[JS Dev 1]:
-  - TASK-102: Match 100% (all caps match), Load: 0/2 → BID: 0.95
-  
-[DB Specialist]:
-  - TASK-103: Match 100% (all caps match), Load: 0/2 → BID: 0.95
-
-[DevOps 1]:
-  - TASK-104: Match 100% (all caps match), Load: 0/4 → BID: 0.95
-
-[QA 1]:
-  - TASK-105: Match 100% (testing perfect match), Load: 0/3 → BID: 0.95
-
-┌─────────────────────────────────────────────────────┐
-│ Task Assignment (highest bids win)                  │
-└─────────────────────────────────────────────────────┘
-
-✓ TASK-101 → Python Dev 1 (bid: 0.95, perfect match)
-✓ TASK-102 → JS Dev 1 (bid: 0.95, perfect match)
-✓ TASK-103 → DB Specialist (bid: 0.95, perfect match)
-✓ TASK-104 → DevOps 1 (bid: 0.95, perfect match)
-✓ TASK-105 → QA 1 (bid: 0.95, testing specialist)
-
-All tasks claimed and in progress...
-
-┌─────────────────────────────────────────────────────┐
-│ New Task Arrives                                     │
-└─────────────────────────────────────────────────────┘
-
-New Task: TASK-106: Fix Python API bug [python, backend, api]
-
-[Python Dev 1]: Load 1/3 (working on TASK-101) → BID: 0.60 (reduced)
-[QA 1]: Has python capability, Load 1/3 → BID: 0.40
-
-✓ TASK-106 → Python Dev 1 (still best match despite load)
-```
-
-## Claiming Strategies
-
-### 1. Best Fit (Default)
-```python
-workflow.set_claiming_strategy("best_fit")
-# Agent with highest capability match claims task
-# Formula: (matched_caps / required_caps) * (1 - current_load)
-```
-
-### 2. Load Balanced
-```python
-workflow.set_claiming_strategy("load_balanced")
-# Prioritizes agents with lower current workload
-# Even distribution across agents
-```
-
-### 3. Priority-Based
-```python
-workflow.set_claiming_strategy("priority_based")
-# High-priority tasks attract stronger bids
-# Agents may defer low-priority tasks
-```
-
-### 4. Capability Threshold
-```python
-workflow.set_claiming_strategy(
-    "capability_threshold",
-    min_match_percentage=0.75  # Must match 75%+ of required capabilities
-)
-```
-
-## Bid Calculation
-
-```python
-# Example bid calculation algorithm
-def calculate_bid(task, agent):
-    # Capability match score
-    matched_caps = len(set(task.capabilities) & set(agent.capabilities))
-    required_caps = len(task.capabilities)
-    capability_score = matched_caps / required_caps
-    
-    # Workload factor
-    current_load = agent.current_tasks / agent.capacity
-    availability_score = 1 - current_load
-    
-    # Priority multiplier
-    priority_multiplier = {
-        "high": 1.5,
-        "medium": 1.0,
-        "low": 0.7
-    }[task.priority]
-    
-    # Final bid
-    bid = capability_score * availability_score * priority_multiplier
-    
-    return bid if bid >= 0.5 else None  # Don't bid if too low
-```
+- **Complex, Open-Ended Tasks**: Solution path not known in advance
+- **Multi-Step Reasoning**: Tasks requiring research → analysis → synthesis
+- **Dynamic Workflows**: Need to adapt based on intermediate results
+- **Mixed Capabilities**: Tasks requiring different types of expertise
+- **Iterative Refinement**: Solutions that need multiple rounds of improvement
+- **Uncertain Requirements**: Tasks where the approach emerges during execution
 
 ## Advantages
 
-- **Self-Organizing**: No central dispatcher needed
-- **Load Balancing**: Automatically distributes work
-- **Fault Tolerant**: If agent fails, task returns to pool
-- **Scalable**: Add agents without reconfiguration
-- **Adaptive**: Responds to changing workloads dynamically
-- **Skill Matching**: Tasks go to best-qualified agents
+- **Dynamic Coordination**: Manager adapts to evolving task requirements
+- **Flexible Collaboration**: Agents can be called multiple times in any order
+- **Complex Problem Solving**: Breaks down intricate tasks into manageable subtasks
+- **Progress Tracking**: Built-in mechanisms to detect stalls and replan
+- **Human Oversight**: Optional plan review for critical decisions
+- **Context Awareness**: Manager maintains shared understanding across all agents
+- **Iterative Improvement**: Supports refinement through multiple rounds
 
 ## Disadvantages
 
-- **Coordination Overhead**: Bid evaluation for each task
-- **Potential Conflicts**: Multiple agents might want same task
-- **Starvation**: Low-capability agents might not get tasks
-- **Complexity**: Bid algorithms can be complex
-- **Monitoring**: Harder to predict exact agent assignments
+- **Manager Complexity**: Requires sophisticated planning and coordination logic
+- **Higher Latency**: Planning overhead adds to execution time
+- **Token Usage**: Manager sees all agent interactions (high context consumption)
+- **Coordination Overhead**: More LLM calls for manager decisions
+- **Unpredictable Paths**: Execution flow varies based on manager decisions
+- **Debugging Complexity**: Harder to trace through dynamic agent selection
 
-## Advanced Features
+## Workflow Execution Flow
 
-### Task Priority Adjustment
+The Magentic orchestration follows this execution pattern:
+
+1. **Planning Phase**: Manager analyzes task and creates initial plan
+2. **Optional Plan Review** (if enabled): Human reviews and approves/modifies plan
+3. **Agent Selection**: Manager selects most appropriate agent for next subtask
+4. **Execution**: Selected agent executes their portion of the task
+5. **Progress Assessment**: Manager evaluates progress and updates the plan
+6. **Stall Detection**: If progress stalls, auto-replan (with optional human review)
+7. **Iteration**: Steps 3-6 repeat until task complete or limits reached
+8. **Final Synthesis**: Manager synthesizes all agent outputs into final result
+
+## Configuration Parameters
+
 ```python
-# High-priority tasks increase bid attractiveness
-workflow.set_priority_multipliers({
-    "critical": 2.0,
-    "high": 1.5,
-    "medium": 1.0,
-    "low": 0.5
-})
-```
-
-### Capability Learning
-```python
-# Agents improve capability scores based on success
-workflow.enable_learning(
-    track_success_rate=True,
-    adjust_bids_by_history=True
+MagenticBuilder(
+    participants=[agent1, agent2, agent3],    # Specialized agents
+    manager_agent=manager,                     # Coordination agent
+    intermediate_outputs=True,                 # Stream agent responses
+    enable_plan_review=False,                  # Human-in-the-loop planning
+    max_round_count=10,                        # Max orchestration rounds
+    max_stall_count=3,                         # Stalls before replanning
+    max_reset_count=2,                         # Max replans allowed
 )
 ```
 
-### Task Reassignment
-```python
-# If agent fails, return task to pool
-workflow.enable_reassignment(
-    max_attempts=3,
-    backoff_factor=1.5
-)
-```
+**Parameter Guidelines:**
+- `max_round_count`: Higher for complex tasks (10-20), lower for simple (3-5)
+- `max_stall_count`: How many rounds without progress before replan (2-3)
+- `max_reset_count`: How many times to replan before giving up (1-2)
+- `enable_plan_review`: Use for critical tasks requiring human oversight
 
 ## Best Practices
 
-1. **Clear Capabilities**: Define specific, non-overlapping capabilities
-2. **Realistic Capacity**: Set agent capacity based on actual performance
-3. **Priority System**: Use priority levels effectively
-4. **Monitoring**: Track assignment patterns and adjust
-5. **Fallback**: Have backup plan if no agent bids on task
-6. **Timeout**: Set task timeouts to prevent indefinite waiting
+1. **Specialized Agents**: Define clear, non-overlapping roles (researcher, coder, analyst)
+2. **Manager Instructions**: Train manager to delegate effectively and track progress
+3. **Monitor Context**: Watch token usage - manager sees all agent interactions
+4. **Limit Rounds**: Set appropriate max_round_count to prevent runaway execution
+5. **Plan Review**: Enable for complex/critical tasks to ensure proper delegation
+6. **Stall Handling**: Configure stall detection to catch stuck workflows
+7. **Agent Descriptions**: Provide clear descriptions so manager knows when to use each agent
 
-## Use Case Variations
+## Comparison with Group Chat
 
-### Customer Service Routing
+Magentic orchestration has the **same architecture** as Group Chat but with a more powerful manager:
+
+| Aspect | Magentic | Group Chat |
+|--------|----------|------------|
+| Manager Role | Complex planning & coordination | Simple speaker selection |
+| Planning | Explicit plan creation | Implicit in selection |
+| Progress Tracking | Built-in progress ledger | Manual |
+| Replanning | Automatic stall detection | Manual |
+| Complexity | Higher | Lower |
+| Use Case | Complex, multi-step tasks | Discussions, debates |
+
+**When to choose Magentic over Group Chat:**
+- Need explicit planning and progress tracking
+- Tasks require breaking into clear subtasks
+- Want automatic stall detection and replanning
+- Need human-in-the-loop plan approval
+
+**When to choose Group Chat instead:**
+- Simpler coordination (just speaker selection)
+- Discussion/debate scenarios
+- Lower token budget
+- More predictable execution flow
+
+## Implementation
+
 ```python
-# Route support tickets based on agent expertise and availability
+from src import AgentTemplate, MagenticOrchestrator
+
+# Define specialized agents
 agents = [
-    TechnicalSupportAgent(capabilities=["technical", "api", "bugs"]),
-    BillingSupportAgent(capabilities=["billing", "refunds", "invoices"]),
-    AccountSupportAgent(capabilities=["account", "security", "access"])
+    AgentTemplate(name="ResearcherAgent", instructions="Research and gather information..."),
+    AgentTemplate(name="CoderAgent", instructions="Write and execute code..."),
+    AgentTemplate(name="AnalystAgent", instructions="Analyze data and provide insights...")
 ]
+
+# Define manager agent
+manager = AgentTemplate(
+    name="MagenticManager",
+    instructions="Coordinate the team to complete complex tasks efficiently..."
+)
+
+# Create orchestrator
+orchestrator = MagenticOrchestrator(
+    agents=agents,
+    manager_agent=manager
+)
+
+# Run autonomous workflow
+result = await orchestrator.run(
+    "Analyze energy efficiency of ML model architectures",
+    max_rounds=10,
+    max_stalls=3,
+    max_resets=2,
+    intermediate_outputs=True
+)
+
+# Run with human-in-the-loop plan review
+result = await orchestrator.run_with_plan_review(
+    "Compare Python vs JavaScript for web development",
+    max_rounds=10,
+    max_stalls=3,
+    max_resets=2,
+    intermediate_outputs=True
+)
 ```
 
-### Content Moderation
-```python
-# Distribute moderation tasks to available moderators
-agents = [
-    ModeratorAgent(capabilities=["text", "english"], capacity=10),
-    ModeratorAgent(capabilities=["image", "nsfw"], capacity=8),
-    ModeratorAgent(capabilities=["video", "copyright"], capacity=5)
-]
-```
-
-## Related Patterns
-
-- **Hand-off**: Use when routing logic should be centralized
-- **Concurrent**: Use when all tasks should start simultaneously
-- **Sequential**: Use when task order matters
+**Key Features:**
+- Manager creates explicit plans and tracks progress
+- Dynamic agent selection based on task evolution
+- Automatic stall detection and replanning
+- Optional human plan review and approval
+- Progress ledger for monitoring collaboration
+- Clear output formatting showing manager plans and agent responses
 
 ## Further Reading
 
-- [Microsoft Agent Framework Workflows](https://learn.microsoft.com/en-us/agent-framework/workflows/)
+- [Microsoft Agent Framework - Magentic Orchestration](https://learn.microsoft.com/en-us/agent-framework/workflows/orchestrations/magentic?pivots=programming-language-python)
+- [Magentic-One Paper (AutoGen)](https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/magentic-one.html)
 - [Architecture Guide](../architecture.md)
-- [Example Implementation](../../examples/magentic_task_distribution.py)
+- [Example Implementation](../../examples/magentic_patterns.py)

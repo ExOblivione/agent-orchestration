@@ -45,11 +45,11 @@ Depending on your use case, select the appropriate pattern:
 
 | Pattern | When to Use | Template |
 |---------|-------------|-------------|
-| **Sequential** | Linear pipeline, each step depends on previous | [Template](../src/sequential_template.py) |
+| **Sequential** | Linear pipeline, each step depends on previous | [Template](../src/sequential_example.py) |
 | **Concurrent** | Independent tasks that can run in parallel | [Template](../src/concurrent_template.py) |
-| **Group Chat** | Collaborative discussion, multiple perspectives | URL for template |
-| **Hand-off** | Route to specialists based on task type | URL for template |
-| **Magentic** | Self-organizing, agents claim relevant tasks | URL for template |
+| **Group Chat** | Collaborative discussion, multiple perspectives | [Template](../src/groupchat_template.py)|
+| **Hand-off** | Route to specialists based on task type | [Template](../src/handoff_template.py) |
+| **Magentic** | Self-organizing, agents claim relevant tasks | [Template](../src/magentic_template.py) |
 
 
 ## Running Examples
@@ -78,4 +78,4 @@ az account set --subscription <your-subscription-id>
 
 - [Architecture Guide](architecture.md)
 - [Microsoft Agent Framework Documentation](https://learn.microsoft.com/en-us/agent-framework/)
-- [Pattern Examples](patterns/)
+- [Pattern Documentations](patterns/)
