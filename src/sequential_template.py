@@ -37,21 +37,20 @@ class SequentialOrchestrator:
         seq_agents = [agent.agent for agent in self.agents]
         workflow = SequentialBuilder(participants=seq_agents).build()
         
-        # Execute workflow and collect outputs
+        # 3) Run and print final conversation
         outputs: list[list[Message]] = []
         async for event in workflow.run(initial_message, stream=True):
             if event.type == "output":
                 outputs.append(cast(list[Message], event.data))
         
-        # Extract final conversation response
         if outputs:
+            print("===== Final Conversation =====")
             messages: list[Message] = outputs[-1]
-            # Return the last assistant message
-            for msg in reversed(messages):
-                if msg.role == "assistant":
-                    return msg.text or ""
+            for i, msg in enumerate(messages, start=1):
+                name = msg.author_name or ("assistant" if msg.role == "assistant" else "user")
+                print(f"{'-' * 60}\n{i:02d} [{name}]\n{msg.text}")
         
-        return "No response generated"
+        return outputs
     
     async def run_with_human_feedback(
         self, 

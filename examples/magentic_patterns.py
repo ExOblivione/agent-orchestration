@@ -12,6 +12,12 @@ Key Patterns Implemented:
 3. Research + Analysis - Combining specialized agents for complex tasks
 """
 
+import sys
+from pathlib import Path
+
+# Add parent directory to path so we can import src
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import os
 from typing import Dict
 from src.magentic_template import MagenticOrchestrator

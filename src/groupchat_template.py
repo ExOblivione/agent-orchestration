@@ -95,16 +95,10 @@ class GroupChatOrchestrator:
 
         # Format and return final conversation
         if final_conversation:
-            if verbose:
-                print("\n\n" + "=" * 80)
-                print("Final Conversation:")
             result_parts = []
             for msg in final_conversation:
                 author = msg.author_name or msg.role
                 result_parts.append(f"\n[{author}]\n{msg.text}")
-                if verbose:
-                    print(f"\n[{author}]\n{msg.text}")
-                    print("-" * 80)
             return "\n".join(result_parts)
         
         return "No response generated"
