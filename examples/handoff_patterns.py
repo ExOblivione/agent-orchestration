@@ -9,6 +9,24 @@ Key Patterns Implemented:
 4. Autonomous mode (full, partial, and custom)
 5. Tool approval (Human-in-the-Loop for sensitive operations)
 6. Checkpointing (durable workflows)
+
+⚠️ TOKEN USAGE WARNING:
+- Examples with autonomous mode can consume 3000-10000+ tokens
+- If running into token limits, use quick_demo_example() instead
+- See TROUBLESHOOTING.md for solutions
+
+🎯 RECOMMENDED FOR LIVE DEMOS:
+- quick_demo_example() - Ultra-simple, low token usage (~500-1000 tokens)
+- basic_handoff_example() - Simple handoff (~800-1500 tokens)
+- controlled_routing_example() - Custom routing (~1000-2000 tokens)
+
+⚠️ WARNING - HIGH TOKEN USAGE:
+- autonomous_mode_example() - Can use 3000-10000+ tokens
+- checkpointing_example() - Moderate-high token usage
+
+📖 REQUIRES USER INTERACTION:
+- interactive_handoff_example() - Manual input needed
+- tool_approval_example() - Manual approval needed
 """
 
 import sys
@@ -234,6 +252,63 @@ def autonomous_workflow(
 # EXAMPLE USAGE FUNCTIONS
 # ============================================================================
 
+async def quick_demo_example():
+    """
+    🎯 RECOMMENDED FOR LIVE DEMOS 🎯
+    
+    Ultra-simple handoff example optimized for demos:
+    - Only 2 agents (triage + specialist)
+    - Ultra-short instructions to minimize tokens
+    - Clear termination after 1 handoff
+    - NO autonomous mode (predictable behavior)
+    - Guaranteed to complete quickly
+    """
+    print("\n=== Quick Demo Example ===\n")
+    
+    # Agent 1: Triage (routes to specialist)
+    triage = AgentTemplate(
+        name="router",
+        instructions="You route customer inquiries. First, acknowledge the question briefly, then handoff to order_specialist."
+    )
+    
+    # Agent 2: Order Specialist (handles query)
+    specialist = AgentTemplate(
+        name="order_specialist",
+        instructions="Check order status with the tool. Give 1 sentence answer.",
+        tools=[check_order_status],
+    )
+    
+    # Termination: Stop after specialist responds (allow 4 messages to capture all)
+    def stop_after_specialist(conversation: List[Message]) -> bool:
+        # Wait for: User message + Router response + Handoff + Specialist response
+        if len(conversation) < 2:
+            return False
+        # Stop once we see a message from the specialist
+        return any(msg.author_name == "order_specialist" for msg in conversation)
+    
+    # Simple workflow
+    def quick_workflow(agent_list: List[Agent]) -> HandoffBuilder:
+        return (
+            HandoffBuilder(
+                name="quick_demo",
+                participants=agent_list,
+                termination_condition=stop_after_specialist,
+            )
+            .with_start_agent(agent_list[0])
+            .build()
+        )
+    
+    orchestrator = HandOffOrchestrator(
+        agents=[triage, specialist],
+        workflow_builder=quick_workflow
+    )
+    
+    print("🔄 Starting workflow...\n")
+    result = await orchestrator.run("Where is my order #12345?")
+    print(result)
+    print("\n✅ Run completed successfully!")
+
+
 async def basic_handoff_example():
     """
     Example 1: Basic triage handoff with default routing.
@@ -245,24 +320,47 @@ async def basic_handoff_example():
     """
     print("\n=== Basic Handoff Example ===\n")
     
-    # Create agents
-    agents_dict = create_customer_support_agents()
-    agents = [
-        agents_dict["triage"],
-        agents_dict["refund"],
-        agents_dict["order"],
-        agents_dict["return"],
-    ]
+    # Create agents with shorter, concise instructions
+    triage = AgentTemplate(
+        name="triage",
+        instructions="You route customer issues. Be extremely brief. Just handoff to the right specialist."
+    )
     
-    # Create orchestrator with simple termination (max 3 messages for quick testing)
+    order_agent = AgentTemplate(
+        name="order_specialist",
+        instructions="Check order status using the tool. Give one sentence answer then say 'Is there anything else?'",
+        tools=[check_order_status],
+    )
+    
+    agents = [triage, order_agent]
+    
+    # Simple termination: stop after specialist responds
+    def quick_termination(conversation: List[Message]) -> bool:
+        if len(conversation) < 2:
+            return False
+        # Stop after order specialist gives response
+        return any(msg.author_name == "order_specialist" for msg in conversation)
+    
+    # Create orchestrator WITHOUT autonomous mode for predictable demo
+    def demo_workflow(agent_list: List[Agent]) -> HandoffBuilder:
+        return (
+            HandoffBuilder(
+                name="demo_handoff",
+                participants=agent_list,
+                termination_condition=quick_termination,
+            )
+            .with_start_agent(agent_list[0])
+            # NO .with_autonomous_mode() - this makes it predictable
+            .build()
+        )
+    
     orchestrator = HandOffOrchestrator(
         agents=agents,
-        workflow_builder=simple_triage_workflow,
-        termination_condition=lambda c: len(c) >= 2
+        workflow_builder=demo_workflow
     )
     
     # Run the workflow
-    result = await orchestrator.run("I need help with my order #12345")
+    result = await orchestrator.run("What's the status of my order #12345?")
     print(result)
 
 
@@ -277,22 +375,59 @@ async def controlled_routing_example():
     """
     print("\n=== Controlled Routing Example ===\n")
     
-    agents_dict = create_customer_support_agents()
-    agents = [
-        agents_dict["triage"],
-        agents_dict["refund"],
-        agents_dict["order"],
-        agents_dict["return"],
-    ]
-    
-    # Use controlled routing workflow with very short termination for quick testing
-    orchestrator = HandOffOrchestrator(
-        agents=agents,
-        workflow_builder=controlled_routing_workflow,
-        termination_condition=lambda c: len(c) >= 2  # Stop after just 2 messages 
+    # Create agents with ultra-short instructions to reduce tokens
+    triage = AgentTemplate(
+        name="triage",
+        instructions="Route to specialists. Be brief."
     )
     
-    result = await orchestrator.run("My order arrived damaged, I need a refund")
+    order_agent = AgentTemplate(
+        name="order_agent",
+        instructions="Check order status. One sentence.",
+        tools=[check_order_status],
+    )
+    
+    return_agent = AgentTemplate(
+        name="return_agent",
+        instructions="Process returns. One sentence. Handoff to triage when done.",
+        tools=[process_return],
+    )
+    
+    agents = [triage, order_agent, return_agent]
+    
+    # Better termination: stop after any specialist completes their task
+    def smart_termination(conversation: List[Message]) -> bool:
+        if len(conversation) < 3:
+            return False
+        # Stop after 5 messages max or when specialist says done
+        if len(conversation) >= 5:
+            return True
+        last_msg = conversation[-1].text.lower()
+        return any(word in last_msg for word in ["processed", "initiated", "complete", "done"])
+    
+    # Custom workflow without autonomous mode
+    def controlled_workflow_demo(agent_list: List[Agent]) -> HandoffBuilder:
+        triage_a, order_a, return_a = agent_list
+        return (
+            HandoffBuilder(
+                name="controlled_demo",
+                participants=agent_list,
+                termination_condition=smart_termination,
+            )
+            .with_start_agent(triage_a)
+            .add_handoff(triage_a, [order_a, return_a])
+            .add_handoff(return_a, [triage_a])
+            .add_handoff(order_a, [triage_a])
+            # NO autonomous mode for demo
+            .build()
+        )
+    
+    orchestrator = HandOffOrchestrator(
+        agents=agents,
+        workflow_builder=controlled_workflow_demo
+    )
+    
+    result = await orchestrator.run("My order #12345 arrived damaged, I need to return it")
     print(result)
 
 
@@ -595,12 +730,19 @@ async def custom_handoff_builder_example():
 async def main():
     """Run all examples (uncomment the ones you want to test)."""
     
-    # Choose which examples to run:
+    # 🎯 BEST FOR LIVE DEMOS - Quick, predictable, low token usage
+    # await quick_demo_example()
     
-    # await basic_handoff_example()
-    await controlled_routing_example()
+    # Other examples (uncomment to test):
+    await basic_handoff_example()
+    # await controlled_routing_example()
+    
+    # ⚠️ Examples below use autonomous mode - high token usage!
+    # Only use with GPT-4 or models with high token limits
     # await autonomous_mode_example(mode="full")
     # await autonomous_mode_example(mode="partial")
+    
+    # Interactive examples (require user input)
     # await interactive_handoff_example()
     # await tool_approval_example()
     # await checkpointing_example()

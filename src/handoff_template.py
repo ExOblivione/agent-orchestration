@@ -93,19 +93,22 @@ class HandOffOrchestrator:
         else:
             workflow = self._default_workflow_builder(agents)
         
-        # Stream events and collect outputs
-        outputs = []
+        # Stream events and collect final conversation
+        final_messages: list[Message] = []
         async for event in workflow.run(stream=True, message=initial_message):
             if event.type == "output":
-                outputs.append(cast(list[Message], event.data))
+                # Check if this is the final output (list of Messages) vs streaming updates
+                if isinstance(event.data, list):
+                    final_messages = event.data
         
         # Format and return conversation
-        if outputs:
-            messages: list[Message] = outputs[-1]
+        if final_messages:
             result_parts = []
-            for msg in messages:
+            for msg in final_messages:
                 author = msg.author_name or msg.role
-                result_parts.append(f"\n[{author}]\n{msg.text}")
+                # Only include non-empty messages
+                if msg.text and msg.text.strip():
+                    result_parts.append(f"\n[{author}]\n{msg.text}")
             return "\n".join(result_parts)
         
         return "No response generated"
