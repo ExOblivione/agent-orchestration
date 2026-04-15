@@ -32,12 +32,12 @@ async def example_concurrent_agents():
     ]
     
     # Optional: Create aggregator agent to consolidate responses
-    # PLACEHOLDER: Set to None to see all agent responses, or provide an aggregator to consolidate
+    # Set to None to see only individual responses without aggregation
     aggregator = AgentTemplate(
         name="summarizer",
         instructions="You are a helpful assistant that consolidates multiple domain expert outputs into one cohesive, concise summary with clear takeaways. Keep it under 200 words."
     )
-    aggregator = None  # Uncomment to see individual agent responses without aggregation
+    # aggregator = None  # Uncomment to disable aggregation
     
     # Create concurrent orchestrator
     orchestrator = ConcurrentOrchestrator(

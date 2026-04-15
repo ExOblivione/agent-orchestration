@@ -12,6 +12,10 @@ class ConcurrentOrchestrator:
     collecting all their responses together. Optionally, an aggregator agent
     can consolidate the diverse perspectives into a single coherent response.
     
+    When an aggregator is provided, the output includes:
+    1. The complete conversation from all parallel agents (for transparency)
+    2. The aggregator's consolidated summary (for synthesis)
+    
     Source: https://learn.microsoft.com/en-us/agent-framework/workflows/orchestrations/concurrent?pivots=programming-language-python
     """
     
@@ -25,21 +29,30 @@ class ConcurrentOrchestrator:
         """
         self.agents = agents
         self.aggregator = aggregator
+        # Store messages before aggregation for transparency
+        self._raw_messages: list[Message] = []
+        self._aggregated_summary: str | None = None
     
     async def run(self, initial_message: str) -> str:
         """
         Execute the concurrent workflow with an initial message.
         
         All agents process the same input simultaneously and independently.
-        Their responses are collected and returned together, optionally
-        aggregated by a custom aggregator agent.
+        Their responses are collected and returned together. If an aggregator
+        is configured, its consolidated summary is appended after all individual
+        agent responses, providing both transparency and synthesis.
         
         Args:
             initial_message: The starting message/prompt for the workflow
             
         Returns:
-            Formatted output containing all agent responses, or aggregated summary
+            Formatted output containing all agent responses, with optional
+            aggregator summary appended at the end
         """
+        # Reset state for this run
+        self._raw_messages = []
+        self._aggregated_summary = None
+        
         # Build the concurrent workflow with actual agents
         con_agents = [agent.agent for agent in self.agents]
         builder = ConcurrentBuilder(participants=con_agents)
@@ -52,19 +65,35 @@ class ConcurrentOrchestrator:
         
         # Execute workflow and collect outputs
         output_data = None
+        
         async for event in workflow.run(initial_message, stream=True):
             if event.type == "output":
                 output_data = event.data
         
-        # Handle output based on whether aggregator was used
-        if output_data:
-            if self.aggregator:
-                # With aggregator: output is a consolidated string
-                return f"===== Final Consolidated Output =====\n{output_data}"
-            else:
-                # Without aggregator: output is list of messages
+        # Handle output - always show full conversation
+        if self.aggregator:
+            # With aggregator: use stored raw messages + aggregated summary
+            if self._raw_messages:
+                result_parts = ["===== Full Concurrent Conversation ====="]
+                
+                for i, msg in enumerate(self._raw_messages, start=1):
+                    name = msg.author_name if msg.author_name else msg.role
+                    separator = "-" * 60
+                    result_parts.append(f"{separator}\n{i:02d} [{name}]:\n{msg.text}")
+                
+                # Append aggregator's consolidated output
+                if self._aggregated_summary:
+                    result_parts.append("\n" + "=" * 60)
+                    result_parts.append("===== Aggregator's Consolidated Summary =====")
+                    result_parts.append("=" * 60)
+                    result_parts.append(self._aggregated_summary)
+                
+                return "\n".join(result_parts)
+        else:
+            # Without aggregator: output is list of messages
+            if output_data and isinstance(output_data, list):
                 messages: list[Message] = cast(list[Message], output_data)
-                result_parts = ["===== Final Aggregated Conversation ====="]
+                result_parts = ["===== Full Concurrent Conversation ====="]
                 
                 for i, msg in enumerate(messages, start=1):
                     name = msg.author_name if msg.author_name else msg.role
@@ -87,11 +116,16 @@ class ConcurrentOrchestrator:
         Returns:
             Consolidated summary from the aggregator agent
         """
-        # Extract one final assistant message per agent
+        # Extract and store all messages before aggregation for transparency
+        self._raw_messages = []
         expert_sections: list[str] = []
+        
         for r in results:
             try:
                 messages = getattr(r.agent_response, "messages", [])
+                # Store all messages for display
+                self._raw_messages.extend(messages)
+                # Extract final message for aggregation
                 final_text = messages[-1].text if messages and hasattr(messages[-1], "text") else "(no content)"
                 expert_sections.append(f"{r.executor_id}:\n{final_text}")
             except Exception as e:
@@ -101,6 +135,7 @@ class ConcurrentOrchestrator:
         prompt = "\n\n".join(expert_sections)
         response = await self.aggregator.run(prompt)
         # AgentTemplate.run() returns a string directly
+        self._aggregated_summary = response
         return response
     
     async def run_with_human_feedback(
@@ -112,7 +147,9 @@ class ConcurrentOrchestrator:
         Execute the concurrent workflow with human-in-the-loop feedback.
         
         This method pauses after specified agents respond, allowing for
-        external input or review before continuing.
+        external input or review before continuing. If an aggregator is
+        configured, its consolidated summary is appended after all individual
+        agent responses.
         
         Args:
             initial_message: The starting message/prompt for the workflow
@@ -120,8 +157,13 @@ class ConcurrentOrchestrator:
                                  If None, pauses after all agents.
             
         Returns:
-            Formatted output containing all agent responses, or aggregated summary
+            Formatted output containing all agent responses, with optional
+            aggregator summary appended at the end
         """
+        # Reset state for this run
+        self._raw_messages = []
+        self._aggregated_summary = None
+        
         # Build the concurrent workflow with actual agents
         con_agents = [agent.agent for agent in self.agents]
         builder = ConcurrentBuilder(participants=con_agents)
@@ -165,15 +207,30 @@ class ConcurrentOrchestrator:
             if new_output is not None:
                 output_data = new_output
         
-        # Handle output based on whether aggregator was used
-        if output_data:
-            if self.aggregator:
-                # With aggregator: output is a consolidated string
-                return f"===== Final Consolidated Output =====\n{output_data}"
-            else:
-                # Without aggregator: output is list of messages
+        # Handle output - always show full conversation
+        if self.aggregator:
+            # With aggregator: use stored raw messages + aggregated summary
+            if self._raw_messages:
+                result_parts = ["===== Full Concurrent Conversation ====="]
+                
+                for i, msg in enumerate(self._raw_messages, start=1):
+                    name = msg.author_name if msg.author_name else msg.role
+                    separator = "-" * 60
+                    result_parts.append(f"{separator}\n{i:02d} [{name}]:\n{msg.text}")
+                
+                # Append aggregator's consolidated output
+                if self._aggregated_summary:
+                    result_parts.append("\n" + "=" * 60)
+                    result_parts.append("===== Aggregator's Consolidated Summary =====")
+                    result_parts.append("=" * 60)
+                    result_parts.append(self._aggregated_summary)
+                
+                return "\n".join(result_parts)
+        else:
+            # Without aggregator: output is list of messages
+            if output_data and isinstance(output_data, list):
                 messages: list[Message] = cast(list[Message], output_data)
-                result_parts = ["===== Final Aggregated Conversation ====="]
+                result_parts = ["===== Full Concurrent Conversation ====="]
                 
                 for i, msg in enumerate(messages, start=1):
                     name = msg.author_name if msg.author_name else msg.role
