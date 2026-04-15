@@ -35,16 +35,22 @@ def create_research_analysis_agents() -> Dict[str, AgentTemplate]:
     researcher = AgentTemplate(
         name="ResearcherAgent",
         instructions=(
-            "You gather facts and data. When you see analysis or opinions from others, "
-            "provide additional facts to support or challenge them. Keep responses brief but substantive."
+            "You gather facts and data. "
+            "When assigned: provide new information each time. "
+            "When you see analysis or opinions from others, provide additional facts to support or challenge them. "
+            "Build on previous contributions - don't just repeat what you've already said. "
+            "Keep responses brief but substantive."
         ),
     )
     
     analyst = AgentTemplate(
         name="AnalystAgent",
         instructions=(
-            "You analyze information critically. When you see facts from the researcher, "
-            "analyze their implications. Challenge assumptions and provide counterpoints. "
+            "You analyze information critically. "
+            "When assigned: provide deeper analysis each time. "
+            "When you see facts from the researcher, analyze their implications and identify patterns. "
+            "Challenge assumptions and provide counterpoints. "
+            "Build on your previous analysis - go deeper with each round. "
             "Keep responses concise but insightful."
         ),
     )
@@ -52,9 +58,12 @@ def create_research_analysis_agents() -> Dict[str, AgentTemplate]:
     writer = AgentTemplate(
         name="WriterAgent",
         instructions=(
-            "You organize and synthesize ideas. When you see research and analysis, "
-            "identify gaps or conflicts and ask for clarification. Structure the discussion. "
-            "Keep responses brief."
+            "You organize and synthesize ideas. "
+            "When assigned: structure the discussion and identify what's missing. "
+            "When you see research and analysis, identify gaps, conflicts, or areas needing clarification. "
+            "Ask for specific information to fill gaps. "
+            "In later rounds, help organize the emerging consensus. "
+            "Keep responses brief but actionable."
         ),
     )
     
@@ -76,8 +85,17 @@ def create_manager_agent() -> AgentTemplate:
         name="ManagerAgent",
         instructions=(
             "You coordinate a team of researcher, analyst, and writer. "
-            "Assign tasks to get different perspectives and encourage debate. "
-            "Make multiple agents respond before synthesizing. Keep plans brief."
+            "Your goal is to facilitate MULTIPLE ROUNDS of discussion before concluding. "
+            "\n\nProcess:"
+            "\n1. Have researcher provide initial facts"
+            "\n2. Have analyst critique and analyze those facts"
+            "\n3. Have writer identify gaps or conflicts"
+            "\n4. Go back to researcher for additional data based on gaps"
+            "\n5. Have analyst provide deeper analysis"
+            "\n6. Continue iterating until you have comprehensive coverage"
+            "\n7. Only conclude when all perspectives have been thoroughly explored"
+            "\n\nEncourage debate and challenge assumptions. Don't rush to conclusions. "
+            "Keep individual plans brief but run multiple rounds."
         ),
     )
 

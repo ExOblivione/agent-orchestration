@@ -71,18 +71,25 @@ class MagenticOrchestrator:
         
         # Keep track of the last executor to format output nicely in streaming mode
         last_message_id: str | None = None
+        last_executor: str | None = None
         output_event: WorkflowEvent | None = None
         async for event in workflow.run(initial_message, stream=True):
+            # Debug: print event type to understand what we're receiving
+            # print(f"\n[DEBUG] Event type: {event.type}, executor_id: {getattr(event, 'executor_id', 'N/A')}")
+            
             if event.type == "output" and isinstance(event.data, AgentResponseUpdate):
                 message_id = event.data.message_id
-                if message_id != last_message_id:
-                    if last_message_id is not None:
+                executor_id = getattr(event, 'executor_id', None)
+                
+                # Print agent header when switching to a new agent
+                if executor_id and executor_id != last_executor:
+                    if last_executor is not None:
                         print("\n")
-                    # Different formatting for manager vs other agents
-                    agent_name = event.executor_id.upper()
-                    print(f"\n{'-'*25}AGENT: {agent_name}{'-'*25}")
-                    last_message_id = message_id
-                print(event.data, end="", flush=True)
+                    print(f"\n{'-'*20}[{executor_id.upper()}]{'-'*20}")
+                    last_executor = executor_id
+                    
+                print(event.data.text, end="", flush=True)
+                last_message_id = message_id
 
             elif event.type == "magentic_orchestrator":
                 event_type = event.data.event_type.name
@@ -96,28 +103,28 @@ class MagenticOrchestrator:
                         print(f"\n{event.data.content.text}\n")
                 
                 elif event_type == "PROGRESS_LEDGER_UPDATED":
-                    # Show agent response with agent name
+                    # Show agent response with agent name (when not streaming)
                     if isinstance(event.data.content, Message):
                         message = event.data.content
                         
-                        # Try multiple ways to get the agent name
+                        # Try to get agent name from multiple sources
                         agent_name = None
-                        if hasattr(event, 'executor_id') and event.executor_id:
+                        if hasattr(message, 'author_name') and message.author_name:
+                            agent_name = message.author_name
+                        elif hasattr(event, 'executor_id') and event.executor_id:
                             agent_name = event.executor_id
-                        elif hasattr(message, 'name') and message.name:
-                            agent_name = message.name
-                        elif hasattr(message, 'author') and message.author:
-                            agent_name = message.author
+                        elif hasattr(message, 'role'):
+                            agent_name = message.role
                         
                         # Format output with agent header
                         if agent_name:
                             agent_display = agent_name.upper()
                             if agent_name == self.manager_agent.name:
-                                print(f"\n{'-'*20}MANAGER: {agent_display}{'-'*20}")
+                                print(f"\n{'-'*20}[MANAGER: {agent_display}]{'-'*20}")
                             else:
-                                print(f"\n{'-'*20}AGENT: {agent_display}{'-'*20}")
+                                print(f"\n{'-'*20}[AGENT: {agent_display}]{'-'*20}")
                         else:
-                            print(f"\n{'-'*20}RESPONSE{'-'*20}")
+                            print(f"\n{'-'*20}[RESPONSE]{'-'*20}")
                         
                         print(f"{message.text}\n")
                 
@@ -202,14 +209,11 @@ class MagenticOrchestrator:
                     if message_id != last_message_id:
                         if last_message_id is not None:
                             print("\n")
-                        # Different formatting for manager vs other agents
-                        agent_name = event.executor_id.upper()
-                        if event.executor_id == self.manager_agent.name:
-                            print(f"\n{'-'*25}MANAGER: {agent_name}{'-'*25}")
-                        else:
-                            print(f"\n{'-'*20}AGENT: {agent_name}{'-'*20}")
+                        # Get agent name from event executor_id
+                        agent_name = event.executor_id if hasattr(event, 'executor_id') and event.executor_id else "UNKNOWN"
+                        print(f"\n{'-'*20}[{agent_name.upper()}]{'-'*20}")
                         last_message_id = message_id
-                    print(event.data, end="", flush=True)
+                    print(event.data.text, end="", flush=True)
                 
                 elif event.type == "magentic_orchestrator":
                     event_type = event.data.event_type.name
@@ -223,28 +227,28 @@ class MagenticOrchestrator:
                             print(f"\n{event.data.content.text}\n")
                     
                     elif event_type == "PROGRESS_LEDGER_UPDATED":
-                        # Show agent response with agent name
+                        # Show agent response with agent name (when not streaming)
                         if isinstance(event.data.content, Message):
                             message = event.data.content
                             
-                            # Try multiple ways to get the agent name
+                            # Try to get agent name from multiple sources
                             agent_name = None
-                            if hasattr(event, 'executor_id') and event.executor_id:
+                            if hasattr(message, 'author_name') and message.author_name:
+                                agent_name = message.author_name
+                            elif hasattr(event, 'executor_id') and event.executor_id:
                                 agent_name = event.executor_id
-                            elif hasattr(message, 'name') and message.name:
-                                agent_name = message.name
-                            elif hasattr(message, 'author') and message.author:
-                                agent_name = message.author
+                            elif hasattr(message, 'role'):
+                                agent_name = message.role
                             
                             # Format output with agent header
                             if agent_name:
                                 agent_display = agent_name.upper()
                                 if agent_name == self.manager_agent.name:
-                                    print(f"\n{'-'*20}MANAGER: {agent_display}{'-'*20}")
+                                    print(f"\n{'-'*20}[MANAGER: {agent_display}]{'-'*20}")
                                 else:
-                                    print(f"\n{'-'*20}AGENT: {agent_display}{'-'*20}")
+                                    print(f"\n{'-'*20}[AGENT: {agent_display}]{'-'*20}")
                             else:
-                                print(f"\n{'-'*20}RESPONSE{'-'*20}")
+                                print(f"\n{'-'*20}[RESPONSE]{'-'*20}")
                             
                             print(f"{message.text}\n")
                     
