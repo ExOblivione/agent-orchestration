@@ -49,13 +49,91 @@ async def example_concurrent_agents():
     question = "We are launching a new budget-friendly electric bike for urban commuters."
     
     print(f"\nOrchestrator: {orchestrator}\n")
-    final_result = await orchestrator.run(question)
+    messages, aggregated_summary = await orchestrator.run(question)
     
-    print(final_result)
+    # Print the results
+    if messages:
+        print("===== Full Concurrent Conversation =====")
+        for i, msg in enumerate(messages, start=1):
+            name = msg.author_name if msg.author_name else msg.role
+            separator = "-" * 60
+            print(f"{separator}\n{i:02d} [{name}]:\n{msg.text}")
+        
+        # Print aggregator's consolidated output if available
+        if aggregated_summary:
+            print("\n" + "=" * 60)
+            print("===== Aggregator's Consolidated Summary =====")
+            print("=" * 60)
+            print(aggregated_summary)
+    else:
+        print("No response generated")
+
+
+async def example_human_feedback():
+    """Example: Concurrent workflow with human-in-the-loop feedback."""
+    print("\n=== Concurrent with Human Feedback Example ===")
+    
+    # Create specialized agents
+    agents = [
+        AgentTemplate(
+            name="security",
+            instructions="You're a security expert. Analyze security risks and provide recommendations."
+        ),
+        AgentTemplate(
+            name="performance",
+            instructions="You're a performance expert. Analyze performance considerations and optimizations."
+        ),
+        AgentTemplate(
+            name="ux",
+            instructions="You're a UX expert. Analyze user experience implications and improvements."
+        )
+    ]
+    
+    aggregator = AgentTemplate(
+        name="architect",
+        instructions="You are a software architect. Consolidate the security, performance, and UX feedback into a cohesive technical recommendation."
+    )
+    
+    # Create orchestrator
+    orchestrator = ConcurrentOrchestrator(
+        agents=agents,
+        aggregator=aggregator
+    )
+    
+    # Execute with human feedback checkpoints
+    print(f"\nOrchestrator: {orchestrator}\n")
+    messages, aggregated_summary, feedback_requests = await orchestrator.run_with_human_feedback(
+        "Design a real-time chat feature for our web application",
+        feedback_agent_names=["security", "performance"]  # Request feedback after these agents
+    )
+    
+    # Print feedback checkpoints
+    if feedback_requests:
+        print(f"\n===== Feedback Checkpoints =====")
+        for i, request_id in enumerate(feedback_requests, start=1):
+            print(f"{i}. Feedback requested at: {request_id}")
+    
+    # Print the results
+    if messages:
+        print("\n===== Full Concurrent Conversation =====")
+        for i, msg in enumerate(messages, start=1):
+            name = msg.author_name if msg.author_name else msg.role
+            separator = "-" * 60
+            print(f"{separator}\n{i:02d} [{name}]:\n{msg.text}")
+        
+        # Print aggregator's consolidated output if available
+        if aggregated_summary:
+            print("\n" + "=" * 60)
+            print("===== Aggregator's Consolidated Summary =====")
+            print("=" * 60)
+            print(aggregated_summary)
+    else:
+        print("No response generated")
 
 
 async def main():
     await example_concurrent_agents()
+    # await example_human_feedback()
 
 if __name__ == "__main__":
     asyncio.run(main())

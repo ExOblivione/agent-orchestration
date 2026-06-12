@@ -33,21 +33,20 @@ class ConcurrentOrchestrator:
         self._raw_messages: list[Message] = []
         self._aggregated_summary: str | None = None
     
-    async def run(self, initial_message: str) -> str:
+    async def run(self, initial_message: str) -> tuple[list[Message], str | None]:
         """
         Execute the concurrent workflow with an initial message.
         
         All agents process the same input simultaneously and independently.
-        Their responses are collected and returned together. If an aggregator
-        is configured, its consolidated summary is appended after all individual
-        agent responses, providing both transparency and synthesis.
+        Their responses are collected and returned together.
         
         Args:
             initial_message: The starting message/prompt for the workflow
             
         Returns:
-            Formatted output containing all agent responses, with optional
-            aggregator summary appended at the end
+            Tuple of (messages, aggregated_summary):
+            - messages: List of all messages from concurrent agents
+            - aggregated_summary: Aggregator's summary if configured, None otherwise
         """
         # Reset state for this run
         self._raw_messages = []
@@ -70,39 +69,17 @@ class ConcurrentOrchestrator:
             if event.type == "output":
                 output_data = event.data
         
-        # Handle output - always show full conversation
+        # Return raw data for formatting by caller
         if self.aggregator:
-            # With aggregator: use stored raw messages + aggregated summary
-            if self._raw_messages:
-                result_parts = ["===== Full Concurrent Conversation ====="]
-                
-                for i, msg in enumerate(self._raw_messages, start=1):
-                    name = msg.author_name if msg.author_name else msg.role
-                    separator = "-" * 60
-                    result_parts.append(f"{separator}\n{i:02d} [{name}]:\n{msg.text}")
-                
-                # Append aggregator's consolidated output
-                if self._aggregated_summary:
-                    result_parts.append("\n" + "=" * 60)
-                    result_parts.append("===== Aggregator's Consolidated Summary =====")
-                    result_parts.append("=" * 60)
-                    result_parts.append(self._aggregated_summary)
-                
-                return "\n".join(result_parts)
+            # With aggregator: return stored raw messages + aggregated summary
+            return (self._raw_messages, self._aggregated_summary)
         else:
             # Without aggregator: output is list of messages
             if output_data and isinstance(output_data, list):
                 messages: list[Message] = cast(list[Message], output_data)
-                result_parts = ["===== Full Concurrent Conversation ====="]
-                
-                for i, msg in enumerate(messages, start=1):
-                    name = msg.author_name if msg.author_name else msg.role
-                    separator = "-" * 60
-                    result_parts.append(f"{separator}\n{i:02d} [{name}]:\n{msg.text}")
-                
-                return "\n".join(result_parts)
+                return (messages, None)
         
-        return "No response generated"
+        return ([], None)
     
     async def _summarize_results(self, results: list[AgentExecutorResponse]) -> str:
         """
@@ -142,14 +119,12 @@ class ConcurrentOrchestrator:
         self,
         initial_message: str,
         feedback_agent_names: List[str] | None = None
-    ) -> str:
+    ) -> tuple[list[Message], str | None, list[str]]:
         """
         Execute the concurrent workflow with human-in-the-loop feedback.
         
         This method pauses after specified agents respond, allowing for
-        external input or review before continuing. If an aggregator is
-        configured, its consolidated summary is appended after all individual
-        agent responses.
+        external input or review before continuing.
         
         Args:
             initial_message: The starting message/prompt for the workflow
@@ -157,12 +132,15 @@ class ConcurrentOrchestrator:
                                  If None, pauses after all agents.
             
         Returns:
-            Formatted output containing all agent responses, with optional
-            aggregator summary appended at the end
+            Tuple of (messages, aggregated_summary, feedback_requests):
+            - messages: List of all messages from concurrent agents
+            - aggregated_summary: Aggregator's summary if configured, None otherwise
+            - feedback_requests: List of request IDs where feedback was requested
         """
         # Reset state for this run
         self._raw_messages = []
         self._aggregated_summary = None
+        feedback_requests = []
         
         # Build the concurrent workflow with actual agents
         con_agents = [agent.agent for agent in self.agents]
@@ -187,10 +165,16 @@ class ConcurrentOrchestrator:
             
             async for event in stream:
                 if event.type == "request_info":
-                    # Auto-approve for this template
-                    # In production, this is where you'd gather actual human feedback
-                    print(f"Request for feedback at: {event.request_id}")
-                    responses[event.request_id] = AgentRequestInfoResponse.approve()
+                    # This is where you gather actual human feedback
+                    feedback_requests.append(event.request_id)
+                    
+                    # Request human approval before proceeding
+                    user_input = input("\nProceed with this agent's output? (yes/no): ").strip().lower()
+                    
+                    if user_input in ["yes", "y"]:
+                        responses[event.request_id] = AgentRequestInfoResponse.approve()
+                    else:
+                        responses[event.request_id] = AgentRequestInfoResponse.reject()
                 elif event.type == "output":
                     output_data = event.data
             
@@ -207,39 +191,17 @@ class ConcurrentOrchestrator:
             if new_output is not None:
                 output_data = new_output
         
-        # Handle output - always show full conversation
+        # Return raw data for formatting by caller
         if self.aggregator:
-            # With aggregator: use stored raw messages + aggregated summary
-            if self._raw_messages:
-                result_parts = ["===== Full Concurrent Conversation ====="]
-                
-                for i, msg in enumerate(self._raw_messages, start=1):
-                    name = msg.author_name if msg.author_name else msg.role
-                    separator = "-" * 60
-                    result_parts.append(f"{separator}\n{i:02d} [{name}]:\n{msg.text}")
-                
-                # Append aggregator's consolidated output
-                if self._aggregated_summary:
-                    result_parts.append("\n" + "=" * 60)
-                    result_parts.append("===== Aggregator's Consolidated Summary =====")
-                    result_parts.append("=" * 60)
-                    result_parts.append(self._aggregated_summary)
-                
-                return "\n".join(result_parts)
+            # With aggregator: return stored raw messages + aggregated summary
+            return (self._raw_messages, self._aggregated_summary, feedback_requests)
         else:
             # Without aggregator: output is list of messages
             if output_data and isinstance(output_data, list):
                 messages: list[Message] = cast(list[Message], output_data)
-                result_parts = ["===== Full Concurrent Conversation ====="]
-                
-                for i, msg in enumerate(messages, start=1):
-                    name = msg.author_name if msg.author_name else msg.role
-                    separator = "-" * 60
-                    result_parts.append(f"{separator}\n{i:02d} [{name}]:\n{msg.text}")
-                
-                return "\n".join(result_parts)
+                return (messages, None, feedback_requests)
         
-        return "No response generated"
+        return ([], None, feedback_requests)
 
     def __repr__(self) -> str:
         """String representation of the orchestrator."""
