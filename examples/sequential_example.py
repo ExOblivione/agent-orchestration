@@ -70,15 +70,71 @@ async def example_specialized_agents():
     
     # Execute the pipeline
     print(f"\nPipeline: {orchestrator}\n")
-    await orchestrator.run(
+    outputs = await orchestrator.run(
         "Create a REST API endpoint for user registration with email validation"
     )
+    
+    # Print the final conversation
+    if outputs:
+        print("===== Final Conversation =====")
+        messages = outputs[-1]
+        for i, msg in enumerate(messages, start=1):
+            name = msg.author_name or ("assistant" if msg.role == "assistant" else "user")
+            print(f"{'-' * 60}\n{i:02d} [{name}]\n{msg.text}")
+
+async def example_human_feedback():
+    """Example: Sequential workflow with human-in-the-loop feedback."""
+    print("=== Human Feedback Example ===")
+    
+    # Create specialized agents
+    planner = AgentTemplate(
+        name="Planner",
+        instructions="You are a planning expert. Create a detailed plan for the given task. Keep it concise."
+    )
+    
+    implementer = AgentTemplate(
+        name="Implementer",
+        instructions="You are an implementation specialist. Execute the plan provided and deliver the solution."
+    )
+    
+    validator = AgentTemplate(
+        name="Validator",
+        instructions="You are a quality assurance expert. Validate the implementation against the plan."
+    )
+    
+    # Create orchestrator
+    orchestrator = SequentialOrchestrator(
+        agents=[planner, implementer, validator]
+    )
+    
+    # Execute with human feedback checkpoints
+    print(f"\nPipeline: {orchestrator}\n")
+    outputs, feedback_requests = await orchestrator.run_with_human_feedback(
+        "Design a simple caching system",
+        feedback_agent_names=["Planner", "Implementer"]  # Request feedback after these agents
+    )
+    
+    # Print feedback checkpoints
+    if feedback_requests:
+        print(f"\n===== Feedback Checkpoints =====")
+        for i, request_id in enumerate(feedback_requests, start=1):
+            print(f"{i}. Feedback requested at: {request_id}")
+    
+    # Print the final conversation
+    if outputs:
+        print("\n===== Final Conversation =====")
+        messages = outputs[-1]
+        for i, msg in enumerate(messages, start=1):
+            name = msg.author_name or ("assistant" if msg.role == "assistant" else "user")
+            print(f"{'-' * 60}\n{i:02d} [{name}]\n{msg.text}")
+
 
 async def main():
     """Run all examples."""
     # await example_single_agent()
     # await example_streaming()
-    await example_specialized_agents()
+    # await example_specialized_agents()
+    await example_human_feedback()
 
 if __name__ == "__main__":
     asyncio.run(main())
