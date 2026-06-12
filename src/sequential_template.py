@@ -23,6 +23,28 @@ class SequentialOrchestrator:
         """
         self.agents = agents
     
+    def _build_workflow(self, include_request_info: bool = False, feedback_agent_names: List[str] | None = None):
+        """
+        Build the sequential workflow with optional request_info enabled.
+        
+        Args:
+            include_request_info: Whether to enable human-in-the-loop feedback
+            feedback_agent_names: List of agent names to pause after for feedback
+            
+        Returns:
+            Built workflow ready to run
+        """
+        seq_agents = [agent.agent for agent in self.agents]
+        builder = SequentialBuilder(participants=seq_agents)
+        
+        if include_request_info:
+            if feedback_agent_names:
+                return builder.with_request_info(agents=feedback_agent_names).build()
+            else:
+                return builder.with_request_info().build()
+        
+        return builder.build()
+    
     async def run(self, initial_message: str) -> list[list[Message]]:
         """
         Execute the sequential workflow with an initial message.
@@ -33,9 +55,7 @@ class SequentialOrchestrator:
         Returns:
             List of message lists representing the conversation at each step
         """
-        # Build the sequential workflow with actual agents
-        seq_agents = [agent.agent for agent in self.agents]
-        workflow = SequentialBuilder(participants=seq_agents).build()
+        workflow = self._build_workflow()
         
         # Run the workflow and collect outputs
         outputs: list[list[Message]] = []
@@ -49,7 +69,7 @@ class SequentialOrchestrator:
         self, 
         initial_message: str, 
         feedback_agent_names: List[str] | None = None
-    ) -> str:
+    ) -> tuple[list[list[Message]], list[str]]:
         """
         Execute the sequential workflow with human-in-the-loop feedback.
         
@@ -62,19 +82,14 @@ class SequentialOrchestrator:
                                  If None, pauses after all agents.
             
         Returns:
-            List of message lists representing the conversation at each step,
-            along with a list of request IDs where feedback was requested
+            Tuple of (outputs, feedback_requests):
+            - outputs: List of message lists representing the conversation at each step
+            - feedback_requests: List of request IDs where feedback was requested
         """
-        # Build the sequential workflow with actual agents
-        seq_agents = [agent.agent for agent in self.agents]
-        
-        # Build workflow with request_info enabled for specified agents
-        builder = SequentialBuilder(participants=seq_agents)
-        if feedback_agent_names:
-            workflow = builder.with_request_info(agents=feedback_agent_names).build()
-        else:
-            workflow = builder.with_request_info().build()
-        
+        workflow = self._build_workflow(
+            include_request_info=True,
+            feedback_agent_names=feedback_agent_names
+        )
         feedback_requests = []
         
         async def process_event_stream(stream):

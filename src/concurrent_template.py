@@ -33,6 +33,33 @@ class ConcurrentOrchestrator:
         self._raw_messages: list[Message] = []
         self._aggregated_summary: str | None = None
     
+    def _build_workflow(self, include_request_info: bool = False, feedback_agent_names: List[str] | None = None):
+        """
+        Build the concurrent workflow with optional request_info enabled.
+        
+        Args:
+            include_request_info: Whether to enable human-in-the-loop feedback
+            feedback_agent_names: List of agent names to pause after for feedback
+            
+        Returns:
+            Built workflow ready to run
+        """
+        con_agents = [agent.agent for agent in self.agents]
+        builder = ConcurrentBuilder(participants=con_agents)
+        
+        # Build workflow with request_info if needed
+        if include_request_info:
+            if feedback_agent_names:
+                builder = builder.with_request_info(agents=feedback_agent_names)
+            else:
+                builder = builder.with_request_info()
+        
+        # Add custom aggregator if provided
+        if self.aggregator:
+            return builder.with_aggregator(self._summarize_results).build()
+        else:
+            return builder.build()
+    
     async def run(self, initial_message: str) -> tuple[list[Message], str | None]:
         """
         Execute the concurrent workflow with an initial message.
@@ -52,15 +79,7 @@ class ConcurrentOrchestrator:
         self._raw_messages = []
         self._aggregated_summary = None
         
-        # Build the concurrent workflow with actual agents
-        con_agents = [agent.agent for agent in self.agents]
-        builder = ConcurrentBuilder(participants=con_agents)
-        
-        # Add custom aggregator if provided
-        if self.aggregator:
-            workflow = builder.with_aggregator(self._summarize_results).build()
-        else:
-            workflow = builder.build()
+        workflow = self._build_workflow()
         
         # Execute workflow and collect outputs
         output_data = None
@@ -142,21 +161,10 @@ class ConcurrentOrchestrator:
         self._aggregated_summary = None
         feedback_requests = []
         
-        # Build the concurrent workflow with actual agents
-        con_agents = [agent.agent for agent in self.agents]
-        builder = ConcurrentBuilder(participants=con_agents)
-        
-        # Build workflow with request_info enabled for specified agents
-        if feedback_agent_names:
-            builder = builder.with_request_info(agents=feedback_agent_names)
-        else:
-            builder = builder.with_request_info()
-        
-        # Add custom aggregator if provided
-        if self.aggregator:
-            workflow = builder.with_aggregator(self._summarize_results).build()
-        else:
-            workflow = builder.build()
+        workflow = self._build_workflow(
+            include_request_info=True,
+            feedback_agent_names=feedback_agent_names
+        )
         
         async def process_event_stream(stream):
             """Process events and collect request_info responses."""

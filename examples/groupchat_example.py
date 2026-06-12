@@ -13,6 +13,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import asyncio
 from src.agent_template import AgentTemplate
 from src.groupchat_template import GroupChatOrchestrator
+from agent_framework.orchestrations import GroupChatBuilder
+from agent_framework import AgentResponseUpdate
 
 
 async def group_chat_example():
@@ -51,9 +53,17 @@ async def group_chat_example():
     print(f"Task: {task}\n")
     print("=" * 80 + "\n")
     
-    final_result = await orchestrator.run(task, verbose=False, limit=4)
+    final_conversation = await orchestrator.run(task, limit=4)
+    
+    # Print the final result
     print("\n=== Final Result ===")
-    print(final_result)
+    if final_conversation:
+        for msg in final_conversation:
+            author = msg.author_name or msg.role
+            print(f"\n[{author}]\n{msg.text}")
+    else:
+        print("No response generated")
+    
     print("\n" + "=" * 80)
     print("Group chat completed!")
     print("=" * 80)
@@ -151,17 +161,111 @@ async def group_chat_with_orchestrator_example():
     print("=" * 80 + "\n")
     
     print("Running with agent-based orchestrator (intelligent speaker selection):\n")
-    final_result = await orchestrator.run(task, verbose=True, limit=12)
     
-    print("=" * 80)
+    # Stream the conversation in real-time
+    final_conversation = []
+    last_author = None
+    
+    agents = [pm.agent for pm in [product_manager, tech_lead, designer]]
+    
+    if orchestrator.orchestrator_agent:
+        workflow_builder = GroupChatBuilder(
+            participants=agents,
+            termination_condition=lambda messages: sum(1 for msg in messages if msg.role == "assistant") >= 12,
+            orchestrator_agent=coordinator.agent
+        )
+    else:
+        workflow_builder = GroupChatBuilder(
+            participants=agents,
+            termination_condition=lambda messages: sum(1 for msg in messages if msg.role == "assistant") >= 12,
+            selection_func=GroupChatOrchestrator.round_robin_selector
+        )
+    
+    workflow = workflow_builder.build()
+    
+    async for event in workflow.run(task, stream=True):
+        if event.type == "output" and isinstance(event.data, AgentResponseUpdate):
+            author = event.data.author_name
+            if author != last_author:
+                if last_author is not None:
+                    print()
+                print(f"[{author}]:", end=" ", flush=True)
+                last_author = author
+            print(event.data.text, end="", flush=True)
+        elif event.type == "output" and isinstance(event.data, list):
+            final_conversation = event.data
+    
+    print("\n\n" + "=" * 80)
     print("\n=== Final Result ===")
-    print(final_result)
+    if final_conversation:
+        for msg in final_conversation:
+            author = msg.author_name or msg.role
+            print(f"\n[{author}]\n{msg.text}")
+    else:
+        print("No response generated")
+
+
+async def group_chat_with_human_feedback():
+    """Example: Group chat with human-in-the-loop feedback."""
+    print("\n=== Group Chat with Human Feedback Example ===")
+    
+    # Create specialized agents
+    analyst = AgentTemplate(
+        name="Analyst",
+        instructions="You are a data analyst. Provide data-driven insights and recommendations. Keep responses brief."
+    )
+    
+    engineer = AgentTemplate(
+        name="Engineer",
+        instructions="You are a software engineer. Provide technical implementation details. Keep responses brief."
+    )
+    
+    manager = AgentTemplate(
+        name="Manager",
+        instructions="You are a project manager. Synthesize inputs and provide actionable decisions. Keep responses brief."
+    )
+    
+    # Create orchestrator
+    orchestrator = GroupChatOrchestrator(
+        agents=[analyst, engineer, manager]
+    )
+    
+    # Execute with human feedback checkpoints
+    task = "Should we migrate our monolith to microservices?"
+    
+    print(f"\nOrchestrator: {orchestrator}")
+    print(f"Task: {task}\n")
+    print("=" * 80 + "\n")
+    
+    final_conversation, feedback_requests = await orchestrator.run_with_human_feedback(
+        task,
+        feedback_agent_names=["Analyst", "Engineer"],  # Request feedback after these agents
+        limit=6
+    )
+    
+    # Print feedback checkpoints
+    if feedback_requests:
+        print(f"\n\n===== Feedback Checkpoints =====")
+        for i, request_id in enumerate(feedback_requests, start=1):
+            print(f"{i}. Feedback requested at: {request_id}")
+    
+    # Print the final conversation
+    print("\n" + "=" * 80)
+    print("\n=== Final Conversation ===")
+    if final_conversation:
+        for msg in final_conversation:
+            author = msg.author_name or msg.role
+            print(f"\n[{author}]\n{msg.text}")
+            print("-" * 80)
+    else:
+        print("No response generated")
 
 
 async def main():
     """Run all examples."""
     # await group_chat_example()
     await group_chat_with_orchestrator_example()
+    # await group_chat_with_human_feedback()
 
 if __name__ == "__main__":
     asyncio.run(main())
