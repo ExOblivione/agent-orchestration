@@ -1,7 +1,7 @@
-from typing import List, cast, Callable, Optional
+from typing import List, Callable, Optional
 from src.agent_template import AgentTemplate
 from agent_framework.orchestrations import HandoffBuilder
-from agent_framework import Message, Agent
+from agent_framework import Message
 
 
 class HandOffOrchestrator:
@@ -9,7 +9,10 @@ class HandOffOrchestrator:
     Handoff workflow orchestrator for agent routing and delegation.
     
     This orchestrator allows agents to transfer conversations to other agents
-    based on expertise and routing rules.
+    based on expertise and routing rules. Runs in autonomous mode by default.
+    
+    For interactive workflows with user input and tool approvals, use HandoffBuilder
+    directly instead of this template (see examples/handoff_patterns.py).
     
     Source: https://learn.microsoft.com/en-us/agent-framework/workflows/orchestrations/handoff?pivots=programming-language-python
     """
@@ -17,61 +20,24 @@ class HandOffOrchestrator:
     def __init__(
         self, 
         agents: List[AgentTemplate],
-        workflow_builder: Optional[Callable[[List[Agent]], HandoffBuilder]] = None,
-        termination_condition: Optional[Callable[[List[Message]], bool]] = None
+        termination_condition: Optional[Callable[[List[Message]], bool]] = None,
+        workflow_name: str = "handoff"
     ):
         """
-        Initialize the handoff orchestrator for non-interactive execution.
-        
-        This orchestrator enables autonomous mode by default, allowing agents to continue
-        without human input. For interactive workflows that handle user input and tool
-        approvals, use HandoffBuilder directly (see examples/handoff_patterns.py).
+        Initialize the handoff orchestrator for autonomous execution.
         
         Args:
             agents: List of agents to participate in handoffs
-            workflow_builder: Optional function that takes a list of Agent objects and returns
-                            a configured HandoffBuilder with .with_autonomous_mode() enabled.
-                            If None, uses default configuration with autonomous mode.
             termination_condition: Optional function that determines when to stop the workflow.
                                  Takes conversation (list of Messages) and returns True to terminate.
                                  If None, workflow runs without automatic termination.
-                                 
-        Note:
-            For interactive workflows with user input and tool approvals, use HandoffBuilder
-            directly instead of this template. See examples/handoff_patterns.py for interactive
-            patterns like tool_approval_example() and interactive_handoff_example().
+            workflow_name: Name for the workflow (default: "handoff")
         """
         self.agents = agents
-        self.workflow_builder = workflow_builder
         self.termination_condition = termination_condition
+        self.workflow_name = workflow_name
     
-    def _default_workflow_builder(self, agents: List[Agent]) -> HandoffBuilder:
-        """
-        Default workflow configuration with autonomous mode enabled.
-        
-        Override this method or pass a custom workflow_builder to __init__.
-        
-        Default configuration:
-        - Starts with first agent (typically triage/coordinator)
-        - Uses termination_condition from __init__ (None if not provided)
-        - Autonomous mode enabled for non-interactive execution
-        
-        Note:
-            Custom workflow builders should also enable autonomous mode if they
-            want to work with the orchestrator's simple run() method. For interactive
-            workflows that handle user input, use the workflow directly (see examples).
-        """
-        return (
-            HandoffBuilder(
-                name="default_handoff",
-                participants=agents,
-                termination_condition=self.termination_condition,
-            )
-            .with_autonomous_mode()  # Enable autonomous mode for non-interactive use
-            .build()
-        )
-    
-    async def run(self, initial_message: str) -> str:
+    async def run(self, initial_message: str, on_event = None) -> list[Message]:
         """
         Execute the handoff workflow autonomously with an initial message.
         
@@ -80,38 +46,37 @@ class HandOffOrchestrator:
         
         Args:
             initial_message: The starting message/prompt for the workflow
+            on_event: Optional callback function to handle workflow events (default: None)
             
         Returns:
-            The final conversation history from all agents
+            List of messages from the handoff conversation
         """
-        # Unwrap agents from AgentTemplate
-        agents = [agent.agent for agent in self.agents]
-        
-        # Build the workflow using custom or default builder
-        if self.workflow_builder:
-            workflow = self.workflow_builder(agents)
-        else:
-            workflow = self._default_workflow_builder(agents)
+        # Build workflow with autonomous mode
+        participants = [agent.agent for agent in self.agents]
+        workflow = (
+            HandoffBuilder(
+                name=self.workflow_name,
+                participants=participants,
+                termination_condition=self.termination_condition,
+            )
+            .with_start_agent(participants[0])  # Start with first agent
+            .with_autonomous_mode()
+            .build()
+        )
         
         # Stream events and collect final conversation
         final_messages: list[Message] = []
-        async for event in workflow.run(stream=True, message=initial_message):
+        async for event in workflow.run(initial_message, stream=True):
+            # Call event callback if provided
+            if on_event:
+                on_event(event)
+            
             if event.type == "output":
                 # Check if this is the final output (list of Messages) vs streaming updates
                 if isinstance(event.data, list):
                     final_messages = event.data
         
-        # Format and return conversation
-        if final_messages:
-            result_parts = []
-            for msg in final_messages:
-                author = msg.author_name or msg.role
-                # Only include non-empty messages
-                if msg.text and msg.text.strip():
-                    result_parts.append(f"\n[{author}]\n{msg.text}")
-            return "\n".join(result_parts)
-        
-        return "No response generated"
+        return final_messages
     
     def __repr__(self) -> str:
         """String representation of the orchestrator."""

@@ -1,6 +1,6 @@
 from typing import List, Optional
 from src.agent_template import AgentTemplate
-from agent_framework import AgentResponseUpdate, Message
+from agent_framework import Message
 from agent_framework.orchestrations import GroupChatBuilder, GroupChatState, AgentRequestInfoResponse
 
 
@@ -42,74 +42,76 @@ class GroupChatOrchestrator:
         participant_names = list(state.participants.keys())
         return participant_names[state.current_round % len(participant_names)]
     
-    async def run(self, initial_message: str, verbose: bool = False, limit: int = 4) -> str:
+    def _build_workflow(
+        self, 
+        limit: int = 4,
+        include_request_info: bool = False,
+        feedback_agent_names: List[str] | None = None
+    ):
+        """
+        Build the group chat workflow with optional request_info enabled.
+        
+        Args:
+            limit: Maximum number of assistant messages before terminating
+            include_request_info: Whether to enable human-in-the-loop feedback
+            feedback_agent_names: List of agent names to pause after for feedback
+            
+        Returns:
+            Built workflow ready to run
+        """
+        # Unwrap the agents from AgentTemplate to get actual agent objects
+        agents = [agent.agent for agent in self.agents]
+
+        # Build the base workflow
+        if self.orchestrator_agent:
+            builder = GroupChatBuilder(
+                participants=agents,
+                termination_condition=lambda messages: sum(1 for msg in messages if msg.role == "assistant") >= limit,
+                orchestrator_agent=self.orchestrator_agent.agent
+            )
+        else:
+            builder = GroupChatBuilder(
+                participants=agents,
+                termination_condition=lambda messages: sum(1 for msg in messages if msg.role == "assistant") >= limit,
+                selection_func=GroupChatOrchestrator.round_robin_selector
+            )
+        
+        # Add request_info if needed
+        if include_request_info:
+            if feedback_agent_names:
+                builder = builder.with_request_info(agents=feedback_agent_names)
+            else:
+                builder = builder.with_request_info()
+        
+        return builder.build()
+    
+    async def run(self, initial_message: str, limit: int = 4) -> list[Message]:
         """
         Execute the group chat workflow with an initial message.
         
         Args:
             initial_message: The starting message/prompt for the group chat
-            verbose: If True, prints the conversation as it happens. If False, only returns final result.
             limit: The maximum number of assistant messages before terminating the chat.
         
         Returns:
-            Formatted final conversation from all agents
+            List of messages from the group chat conversation
         """
-        # Unwrap the agents from AgentTemplate to get actual agent objects
-        agents = [agent.agent for agent in self.agents]
-
-        # Build the group chat workflow
-        # To use content_based_selector or a custom selector, change selection_func parameter
-        if self.orchestrator_agent:
-            # Use agent-based orchestrator for intelligent speaker selection
-            workflow = GroupChatBuilder(
-                participants=agents,
-                termination_condition=lambda messages: sum(1 for msg in messages if msg.role == "assistant") >= limit,
-                orchestrator_agent=self.orchestrator_agent.agent
-            ).build()
-        else:
-            # Use round-robin selector by default
-            workflow = GroupChatBuilder(
-                participants=agents,
-                termination_condition=lambda messages: sum(1 for msg in messages if msg.role == "assistant") >= limit,
-                selection_func=GroupChatOrchestrator.round_robin_selector
-            ).build()
-        
+        workflow = self._build_workflow(limit=limit)
         final_conversation: list[Message] = []
-        last_author: str | None = None
 
         # Run the workflow with streaming enabled
         async for event in workflow.run(initial_message, stream=True):
-            if event.type == "output" and isinstance(event.data, AgentResponseUpdate):
-                # Print streaming agent updates only if verbose mode is enabled
-                if verbose:
-                    author = event.data.author_name
-                    if author != last_author:
-                        if last_author is not None:
-                            print()
-                        print(f"[{author}]:", end=" ", flush=True)
-                        last_author = author
-                    print(event.data.text, end="", flush=True)
-            elif event.type == "output" and isinstance(event.data, list):
-                # Workflow completed - data is a list of Message
+            if event.type == "output" and isinstance(event.data, list):
                 final_conversation = event.data
 
-        # Format and return final conversation
-        if final_conversation:
-            result_parts = []
-            for msg in final_conversation:
-                author = msg.author_name or msg.role
-                result_parts.append(f"\n[{author}]\n{msg.text}")
-            return "\n".join(result_parts)
-        
-        return "No response generated"
+        return final_conversation
     
     async def run_with_human_feedback(
         self,
         initial_message: str,
         feedback_agent_names: List[str] | None = None,
-        verbose: bool = False,
         limit: int = 4
-    ) -> str:
+    ) -> tuple[list[Message], list[str]]:
         """
         Execute the group chat workflow with human-in-the-loop feedback.
         
@@ -120,57 +122,37 @@ class GroupChatOrchestrator:
             initial_message: The starting message/prompt for the group chat
             feedback_agent_names: List of agent names to pause after for feedback.
                                  If None, pauses after all agents.
-            verbose: If True, prints the conversation as it happens
             limit: The maximum number of assistant messages before terminating
             
         Returns:
-            Formatted final conversation from all agents
+            Tuple of (messages, feedback_requests):
+            - messages: List of all messages from the group chat
+            - feedback_requests: List of request IDs where feedback was requested
         """
-        # Unwrap the agents from AgentTemplate to get actual agent objects
-        agents = [agent.agent for agent in self.agents]
-
-        # Build the group chat workflow
-        if self.orchestrator_agent:
-            builder = GroupChatBuilder(
-                participants=agents,
-                termination_condition=lambda messages: sum(1 for msg in messages if msg.role == "assistant") >= limit,
-                orchestrator_agent=self.orchestrator_agent.agent
-            )
-        else:
-            builder = GroupChatBuilder(
-                participants=agents,
-                termination_condition=lambda messages: sum(1 for msg in messages if msg.role == "assistant") >= limit,
-                selection_func=GroupChatOrchestrator.round_robin_selector
-            )
-        
-        # Build workflow with request_info enabled for specified agents
-        if feedback_agent_names:
-            workflow = builder.with_request_info(agents=feedback_agent_names).build()
-        else:
-            workflow = builder.with_request_info().build()
+        workflow = self._build_workflow(
+            limit=limit,
+            include_request_info=True,
+            feedback_agent_names=feedback_agent_names
+        )
+        feedback_requests = []
         
         async def process_event_stream(stream):
             """Process events and collect request_info responses."""
             responses = {}
             final_conversation: list[Message] = []
-            last_author: str | None = None
             
             async for event in stream:
                 if event.type == "request_info":
-                    # Auto-approve for this template
-                    # In production, this is where you'd gather actual human feedback
-                    print(f"Request for feedback at: {event.request_id}")
-                    responses[event.request_id] = AgentRequestInfoResponse.approve()
-                elif event.type == "output" and isinstance(event.data, AgentResponseUpdate):
-                    # Print streaming agent updates only if verbose mode is enabled
-                    if verbose:
-                        author = event.data.author_name
-                        if author != last_author:
-                            if last_author is not None:
-                                print()
-                            print(f"[{author}]:", end=" ", flush=True)
-                            last_author = author
-                        print(event.data.text, end="", flush=True)
+                    # This is where you gather actual human feedback
+                    feedback_requests.append(event.request_id)
+                    
+                    # Request human approval before proceeding
+                    user_input = input("\nProceed with this agent's response? (yes/no): ").strip().lower()
+                    
+                    if user_input in ["yes", "y"]:
+                        responses[event.request_id] = AgentRequestInfoResponse.approve()
+                    else:
+                        responses[event.request_id] = AgentRequestInfoResponse.reject()
                 elif event.type == "output" and isinstance(event.data, list):
                     # Workflow completed - data is a list of Message
                     final_conversation = event.data
@@ -188,21 +170,7 @@ class GroupChatOrchestrator:
             if new_conversation:
                 final_conversation = new_conversation
         
-        # Format and return final conversation
-        if final_conversation:
-            if verbose:
-                print("\n\n" + "=" * 80)
-                print("Final Conversation:")
-            result_parts = []
-            for msg in final_conversation:
-                author = msg.author_name or msg.role
-                result_parts.append(f"\n[{author}]\n{msg.text}")
-                if verbose:
-                    print(f"\n[{author}]\n{msg.text}")
-                    print("-" * 80)
-            return "\n".join(result_parts)
-        
-        return "No response generated"
+        return (final_conversation, feedback_requests)
 
     def __repr__(self) -> str:
         """String representation of the orchestrator."""

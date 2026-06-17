@@ -23,7 +23,29 @@ class SequentialOrchestrator:
         """
         self.agents = agents
     
-    async def run(self, initial_message: str) -> str:
+    def _build_workflow(self, include_request_info: bool = False, feedback_agent_names: List[str] | None = None):
+        """
+        Build the sequential workflow with optional request_info enabled.
+        
+        Args:
+            include_request_info: Whether to enable human-in-the-loop feedback
+            feedback_agent_names: List of agent names to pause after for feedback
+            
+        Returns:
+            Built workflow ready to run
+        """
+        seq_agents = [agent.agent for agent in self.agents]
+        builder = SequentialBuilder(participants=seq_agents)
+        
+        if include_request_info:
+            if feedback_agent_names:
+                return builder.with_request_info(agents=feedback_agent_names).build()
+            else:
+                return builder.with_request_info().build()
+        
+        return builder.build()
+    
+    async def run(self, initial_message: str) -> list[list[Message]]:
         """
         Execute the sequential workflow with an initial message.
         
@@ -31,24 +53,15 @@ class SequentialOrchestrator:
             initial_message: The starting message/prompt for the workflow
             
         Returns:
-            The final response from the last agent in the sequence
+            List of message lists representing the conversation at each step
         """
-        # Build the sequential workflow with actual agents
-        seq_agents = [agent.agent for agent in self.agents]
-        workflow = SequentialBuilder(participants=seq_agents).build()
+        workflow = self._build_workflow()
         
-        # 3) Run and print final conversation
+        # Run the workflow and collect outputs
         outputs: list[list[Message]] = []
         async for event in workflow.run(initial_message, stream=True):
             if event.type == "output":
                 outputs.append(cast(list[Message], event.data))
-        
-        if outputs:
-            print("===== Final Conversation =====")
-            messages: list[Message] = outputs[-1]
-            for i, msg in enumerate(messages, start=1):
-                name = msg.author_name or ("assistant" if msg.role == "assistant" else "user")
-                print(f"{'-' * 60}\n{i:02d} [{name}]\n{msg.text}")
         
         return outputs
     
@@ -56,7 +69,7 @@ class SequentialOrchestrator:
         self, 
         initial_message: str, 
         feedback_agent_names: List[str] | None = None
-    ) -> str:
+    ) -> tuple[list[list[Message]], list[str]]:
         """
         Execute the sequential workflow with human-in-the-loop feedback.
         
@@ -69,17 +82,15 @@ class SequentialOrchestrator:
                                  If None, pauses after all agents.
             
         Returns:
-            The final response from the last agent in the sequence
+            Tuple of (outputs, feedback_requests):
+            - outputs: List of message lists representing the conversation at each step
+            - feedback_requests: List of request IDs where feedback was requested
         """
-        # Build the sequential workflow with actual agents
-        seq_agents = [agent.agent for agent in self.agents]
-        
-        # Build workflow with request_info enabled for specified agents
-        builder = SequentialBuilder(participants=seq_agents)
-        if feedback_agent_names:
-            workflow = builder.with_request_info(agents=feedback_agent_names).build()
-        else:
-            workflow = builder.with_request_info().build()
+        workflow = self._build_workflow(
+            include_request_info=True,
+            feedback_agent_names=feedback_agent_names
+        )
+        feedback_requests = []
         
         async def process_event_stream(stream):
             """Process events and collect request_info responses."""
@@ -90,7 +101,7 @@ class SequentialOrchestrator:
                 if event.type == "request_info":
                     # Auto-approve for this template
                     # In production, this is where you'd gather actual human feedback
-                    print(f"Request for feedback at: {event.request_id}")
+                    feedback_requests.append(event.request_id)
                     responses[event.request_id] = AgentRequestInfoResponse.approve()
                 elif event.type == "output":
                     outputs.append(cast(list[Message], event.data))
@@ -108,14 +119,7 @@ class SequentialOrchestrator:
             if new_outputs:
                 outputs = new_outputs
         
-        # Extract final response
-        if outputs:
-            messages: list[Message] = outputs[-1]
-            for msg in reversed(messages):
-                if msg.role == "assistant":
-                    return msg.text or ""
-        
-        return "No response generated"
+        return outputs, feedback_requests
     
     def __repr__(self) -> str:
         """String representation of the orchestrator."""
