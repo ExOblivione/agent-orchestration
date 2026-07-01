@@ -1,43 +1,50 @@
 # Getting Started
 
-## Prerequisites
+## � Setup Instructions
+
+### Prerequisites
 
 - Python 3.10 or higher
-- Azure OpenAI or OpenAI API access
-- Basic understanding of async Python
+- Azure subscription with Azure OpenAI access
+- Azure AI Projects setup
 
-## Installation
+### Installation
 
-### 1. Install Microsoft Agent Framework
+1. **Clone the repository** (if you haven't already)
+   ```bash
+   git clone <your-repo-url>
+   cd agent-orchestration
+   ```
 
-```bash
-pip install agent-framework --pre
-```
+2. **Create a virtual environment**
+   ```bash
+   # Windows
+   python -m venv venv
+   venv\Scripts\activate
+   
+   # macOS/Linux
+   python3 -m venv venv
+   source venv/bin/activate
+   ```
 
-### 2. Set Up Environment Variables
+3. **Install dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-Create a `.env` file in your project root:
+4. **Configure environment variables**
+   
+    Create a `.env` file in your project root:
 
-```bash
-# Azure OpenAI (recommended)
-AZURE_AI_PROJECT_ENDPOINT=https://your-project.openai.azure.com
-AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME=gpt-4
-```
-
-**Note**: Agent Framework doesn't auto-load `.env` files. Use `python-dotenv`:
-
-```bash
-pip install python-dotenv
-```
-
-```python
-from dotenv import load_dotenv
-load_dotenv()
-```
+    ```bash
+    # Azure OpenAI (recommended)
+    AZURE_AI_PROJECT_ENDPOINT=https://your-project.openai.azure.com
+    AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME=gpt-4
+    ```
 
 ## Your First Agent
 
-Create a simple agent using Microsoft Agent Framework: URL for Readme file to the agent template
+Use the [simple agent example](../examples/agent_examples.py) for creating an agent using Microsoft Agent Framework.
 
 ## Choose Your Orchestration Pattern
 
@@ -63,9 +70,21 @@ python examples.py
 
 ### Common Issues
 
+**Issue:** PowerShell Execution Policy Error
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
 **Issue**: "No module named 'agent_framework'"
 ```bash
 pip install agent-framework --pre
+```
+
+**Issue**: Experimental warnings from agent_framework
+These warnings are suppressed by default in the framework templates. If you see them in your own code, add this to the top of your script:
+```python
+import warnings
+warnings.filterwarnings('ignore', message='.*experimental.*')
 ```
 
 **Issue**: Authentication errors with Azure

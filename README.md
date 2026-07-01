@@ -44,6 +44,6 @@ This framework provides reusable templates and patterns for orchestrating multip
 - **Type Checking**: Pydantic for data validation
 - **Testing**: pytest for comprehensive testing
 
-## 🚀 Ready to get started?
+## � Ready to get started?
 
 [Getting Started](docs/getting-started.md)

@@ -1,4 +1,5 @@
 # Microsoft Agent Framework
+agent-framework
 azure-ai-projects
 azure-identity
 openai
@@ -7,9 +8,6 @@ openai
 python-dotenv
 pydantic>=2.10.0,<2.13.0
 
-# Async support
-asyncio
-
-# Testing (optional)
+# Testing
 pytest
 pytest-asyncio
