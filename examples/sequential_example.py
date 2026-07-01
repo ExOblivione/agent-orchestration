@@ -63,8 +63,6 @@ async def example_specialized_agents():
                 print(msg.text, end="", flush=True)
         print("\n")
 
-
-
 async def main():
     await example_specialized_agents()
 

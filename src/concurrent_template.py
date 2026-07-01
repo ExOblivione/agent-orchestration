@@ -1,6 +1,6 @@
 from typing import List, cast
 from src.agent_template import AgentTemplate
-from agent_framework.orchestrations import ConcurrentBuilder, AgentRequestInfoResponse
+from agent_framework.orchestrations import ConcurrentBuilder
 from agent_framework import Message
 from agent_framework import AgentExecutorResponse
 
@@ -134,83 +134,6 @@ class ConcurrentOrchestrator:
         self._aggregated_summary = response
         return response
     
-    async def run_with_human_feedback(
-        self,
-        initial_message: str,
-        feedback_agent_names: List[str] | None = None
-    ) -> tuple[list[Message], str | None, list[str]]:
-        """
-        Execute the concurrent workflow with human-in-the-loop feedback.
-        
-        This method pauses after specified agents respond, allowing for
-        external input or review before continuing.
-        
-        Args:
-            initial_message: The starting message/prompt for the workflow
-            feedback_agent_names: List of agent names to pause after for feedback.
-                                 If None, pauses after all agents.
-            
-        Returns:
-            Tuple of (messages, aggregated_summary, feedback_requests):
-            - messages: List of all messages from concurrent agents
-            - aggregated_summary: Aggregator's summary if configured, None otherwise
-            - feedback_requests: List of request IDs where feedback was requested
-        """
-        # Reset state for this run
-        self._raw_messages = []
-        self._aggregated_summary = None
-        feedback_requests = []
-        
-        workflow = self._build_workflow(
-            include_request_info=True,
-            feedback_agent_names=feedback_agent_names
-        )
-        
-        async def process_event_stream(stream):
-            """Process events and collect request_info responses."""
-            responses = {}
-            output_data = None
-            
-            async for event in stream:
-                if event.type == "request_info":
-                    # This is where you gather actual human feedback
-                    feedback_requests.append(event.request_id)
-                    
-                    # Request human approval before proceeding
-                    user_input = input("\nProceed with this agent's output? (yes/no): ").strip().lower()
-                    
-                    if user_input in ["yes", "y"]:
-                        responses[event.request_id] = AgentRequestInfoResponse.approve()
-                    else:
-                        responses[event.request_id] = AgentRequestInfoResponse.reject()
-                elif event.type == "output":
-                    output_data = event.data
-            
-            return responses if responses else None, output_data
-        
-        # Initial run
-        stream = workflow.run(initial_message, stream=True)
-        pending_responses, output_data = await process_event_stream(stream)
-        
-        # Continue processing until no more feedback requests
-        while pending_responses is not None:
-            stream = workflow.run(stream=True, responses=pending_responses)
-            pending_responses, new_output = await process_event_stream(stream)
-            if new_output is not None:
-                output_data = new_output
-        
-        # Return raw data for formatting by caller
-        if self.aggregator:
-            # With aggregator: return stored raw messages + aggregated summary
-            return (self._raw_messages, self._aggregated_summary, feedback_requests)
-        else:
-            # Without aggregator: output is list of messages
-            if output_data and isinstance(output_data, list):
-                messages: list[Message] = cast(list[Message], output_data)
-                return (messages, None, feedback_requests)
-        
-        return ([], None, feedback_requests)
-
     def __repr__(self) -> str:
         """String representation of the orchestrator."""
         agent_names = ", ".join([agent.name for agent in self.agents])
