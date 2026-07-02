@@ -30,32 +30,59 @@ class MagenticEventPrinter:
     """Handler for printing Magentic workflow events."""
     
     def __init__(self):
-        self.last_executor: str | None = None
-        self.last_message_id: str | None = None
+        """Initialize the event printer."""
+        self.printed_messages = set()  # Track printed message texts to avoid duplicates
     
     def __call__(self, event, manager_name: str):
         """Handle a workflow event and print appropriate output."""
         
-        if event.type == "output" and isinstance(event.data, AgentResponseUpdate):
-            self._handle_agent_output(event)
+        # Handle executor completed events - accumulate and display agent responses
+        if event.type == "executor_completed":
+            if isinstance(event.data, list) and len(event.data) > 0:
+                # Accumulate all text from streaming chunks for each agent
+                agent_texts = {}  # agent_name -> accumulated text
+                
+                # Go through all messages and accumulate text by agent
+                for msg in event.data:
+                    if hasattr(msg, 'role') and msg.role == 'assistant' and hasattr(msg, 'author_name'):
+                        agent_name = msg.author_name
+                        
+                        # Skip manager agent
+                        if 'manager' in agent_name.lower():
+                            continue
+                        
+                        # Initialize if first time seeing this agent
+                        if agent_name not in agent_texts:
+                            agent_texts[agent_name] = ""
+                        
+                        # Get text from this message chunk
+                        chunk_text = ""
+                        
+                        # Try contents field
+                        if hasattr(msg, 'contents') and msg.contents:
+                            for content in msg.contents:
+                                if hasattr(content, 'type') and content.type == 'text':
+                                    if hasattr(content, 'text') and content.text:
+                                        chunk_text += content.text
+                        
+                        # Try direct text field
+                        if not chunk_text and hasattr(msg, 'text') and msg.text:
+                            chunk_text = msg.text
+                        
+                        # Accumulate
+                        if chunk_text:
+                            agent_texts[agent_name] += chunk_text
+                
+                # Now print accumulated text for each agent (if not already printed)
+                for agent_name, full_text in agent_texts.items():
+                    if full_text and full_text[:200] not in self.printed_messages:
+                        print(f"\n{'-'*20}[{agent_name.upper()}]{'-'*20}")
+                        print(f"{full_text}\n")
+                        self.printed_messages.add(full_text[:200])
         
+        # Handle orchestrator events (plan, progress, replan)
         elif event.type == "magentic_orchestrator":
             self._handle_orchestrator_event(event, manager_name)
-    
-    def _handle_agent_output(self, event):
-        """Handle streaming agent output."""
-        message_id = event.data.message_id
-        executor_id = getattr(event, 'executor_id', None)
-        
-        # Print agent header when switching to a new agent
-        if executor_id and executor_id != self.last_executor:
-            if self.last_executor is not None:
-                print("\n")
-            print(f"\n{'-'*20}[{executor_id.upper()}]{'-'*20}")
-            self.last_executor = executor_id
-        
-        print(event.data.text, end="", flush=True)
-        self.last_message_id = message_id
     
     def _handle_orchestrator_event(self, event, manager_name: str):
         """Handle orchestrator-specific events."""
@@ -63,9 +90,6 @@ class MagenticEventPrinter:
         
         if event_type == "PLAN_CREATED":
             self._print_plan(event)
-        
-        elif event_type == "PROGRESS_LEDGER_UPDATED":
-            self._print_progress_update(event, manager_name)
         
         elif event_type == "REPLANNED":
             self._print_replan(event)
@@ -77,32 +101,6 @@ class MagenticEventPrinter:
         print(f"{'*'*60}")
         if isinstance(event.data.content, Message):
             print(f"\n{event.data.content.text}\n")
-    
-    def _print_progress_update(self, event, manager_name: str):
-        """Print agent progress updates."""
-        if isinstance(event.data.content, Message):
-            message = event.data.content
-            
-            # Try to get agent name from multiple sources
-            agent_name = None
-            if hasattr(message, 'author_name') and message.author_name:
-                agent_name = message.author_name
-            elif hasattr(event, 'executor_id') and event.executor_id:
-                agent_name = event.executor_id
-            elif hasattr(message, 'role'):
-                agent_name = message.role
-            
-            # Format output with agent header
-            if agent_name:
-                agent_display = agent_name.upper()
-                if agent_name == manager_name:
-                    print(f"\n{'-'*20}[MANAGER: {agent_display}]{'-'*20}")
-                else:
-                    print(f"\n{'-'*20}[AGENT: {agent_display}]{'-'*20}")
-            else:
-                print(f"\n{'-'*20}[RESPONSE]{'-'*20}")
-            
-            print(f"{message.text}\n")
     
     def _print_replan(self, event):
         """Print replanning notification."""
@@ -261,7 +259,6 @@ async def basic_magentic_example():
         max_rounds=10,  # More rounds for conversation
         max_stalls=2,
         max_resets=2,
-        intermediate_outputs=True,  # Stream intermediate outputs for visibility
         on_event=event_printer  # Pass the event handler
     )
     

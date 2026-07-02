@@ -40,6 +40,7 @@
     # Azure OpenAI (recommended)
     AZURE_AI_PROJECT_ENDPOINT=https://your-project.openai.azure.com
     AZURE_OPENAI_RESPONSES_DEPLOYMENT_NAME=gpt-4
+    AZURE_OPENAI_API_KEY=...
     ```
 
 ## Your First Agent
